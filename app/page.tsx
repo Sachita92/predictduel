@@ -1,13 +1,28 @@
 'use client'
 
+import { useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { ArrowRight, TrendingUp, Zap, Users } from 'lucide-react'
 import TopNav from '@/components/navigation/TopNav'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
+import WalletChecker from '@/components/debug/WalletChecker'
 
 export default function Home() {
+  const router = useRouter()
+  
+  const handleStartDuel = useCallback(() => {
+    // When button is clicked, take user to the create duel page
+    router.push('/create')
+  }, [router])
+  
+  const handleViewDuels = useCallback(() => {
+    // When button is clicked, take user to the duels page to see other duels
+    router.push('/duels')
+  }, [router])
+  
   return (
     <div className="min-h-screen bg-background-dark">
       <TopNav />
@@ -53,6 +68,7 @@ export default function Home() {
           </Card>
         </div>
       </section>
+
       
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-20 pb-32">
@@ -105,15 +121,26 @@ export default function Home() {
               Social prediction battles powered by Solana
             </p>
             
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Button size="lg" glow className="text-lg px-8 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button 
+                size="lg" 
+                glow 
+                className="text-lg px-8 py-4 w-full sm:w-auto"
+                onClick={handleStartDuel}
+              >
                 Start Your First Duel
                 <ArrowRight className="ml-2 inline" size={20} />
               </Button>
-            </motion.div>
+              
+              <Button 
+                size="lg" 
+                variant="secondary"
+                className="text-lg px-8 py-4 w-full sm:w-auto bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30 text-white"
+                onClick={handleViewDuels}
+              >
+                View Predict Duels
+              </Button>
+            </div>
           </motion.div>
           
           {/* Stats Banner */}
@@ -194,6 +221,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      
+      {/* Wallet Checker - Debug Tool */}
+      <WalletChecker />
     </div>
   )
 }

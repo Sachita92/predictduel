@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Share2, MessageCircle, X, TrendingUp } from 'lucide-react'
+import { Share2, MessageCircle, X, TrendingUp, Loader2 } from 'lucide-react'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Card from '@/components/ui/Card'
@@ -11,7 +11,9 @@ import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
 
 export default function DuelDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
-  const id = typeof params === 'object' && 'then' in params ? '' : params.id
+  // All hooks must be called at the top, before any conditional returns
+  const [id, setId] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(true)
   const [status] = useState<'waiting' | 'active' | 'resolving'>('active')
   const [yourPosition] = useState<'yes' | 'no'>('yes')
   const [opponentPosition] = useState<'yes' | 'no'>('no')
@@ -19,6 +21,35 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [opponentStake] = useState(0.1)
   const [currentPrice] = useState(99500)
   const [targetPrice] = useState(100000)
+  
+  useEffect(() => {
+    // Handle both sync and async params (Next.js 14 vs 15)
+    if (typeof params === 'object' && 'then' in params) {
+      // Async params (Next.js 15)
+      params.then((resolvedParams) => {
+        setId(resolvedParams.id)
+        setIsLoading(false)
+      })
+    } else {
+      // Sync params (Next.js 14)
+      setId(params.id)
+      setIsLoading(false)
+    }
+  }, [params])
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background-dark">
+        <TopNav />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="animate-spin text-primary-from" size={48} />
+            <p className="text-white/70">Loading duel...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
   
   const deadline = new Date(Date.now() + 86400000)
   const question = 'Will BTC hit $100K by Friday?'

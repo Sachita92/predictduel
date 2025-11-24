@@ -1,20 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
+import { usePrivy } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
+import { getWalletAddress } from '@/lib/privy-helpers'
+import { APP_BLOCKCHAIN } from '@/lib/blockchain-config'
 
 const categories = [
   { id: 'crypto', icon: '💰', label: 'Crypto Prices' },
   { id: 'weather', icon: '⛅', label: 'Weather' },
   { id: 'sports', icon: '⚽', label: 'Sports' },
   { id: 'meme', icon: '🎭', label: 'Meme/Fun' },
-  { id: 'local', icon: '🏙️', label: 'Local (Kathmandu)' },
 ]
 
 const quickDeadlines = [
@@ -24,27 +27,133 @@ const quickDeadlines = [
 ]
 
 export default function CreatePage() {
+  const router = useRouter()
+  const { authenticated, user, ready } = usePrivy()
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
   const [stake, setStake] = useState(0.1)
   const [deadline, setDeadline] = useState(86400000)
   const [duelType, setDuelType] = useState<'friend' | 'public'>('public')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
   
   const totalSteps = 4
+  
+  // Get wallet address for the app's configured blockchain
+  // This automatically uses the correct format (Solana, Ethereum, etc.) based on APP_BLOCKCHAIN setting
+  const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
+  
+  // Redirect to login if not authenticated (only when ready)
+  useEffect(() => {
+    if (ready && !authenticated) {
+      router.push('/login')
+    }
+  }, [ready, authenticated, router])
+  
+  // Show loading state while Privy initializes
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-background-dark pb-20 flex items-center justify-center">
+        <TopNav />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-primary-from" size={48} />
+          <p className="text-white/70">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Show loading state while redirecting
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-background-dark pb-20 flex items-center justify-center">
+        <TopNav />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-primary-from" size={48} />
+          <p className="text-white/70">Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
   
   const handleNext = () => {
     if (step < totalSteps) setStep(step + 1)
   }
   
   const handleBack = () => {
-    if (step > 1) setStep(step - 1)
+    // If we're on step 1, go back to home page
+    // Otherwise, go back to previous step
+    if (step === 1) {
+      router.push('/')
+    } else {
+      setStep(step - 1)
+    }
   }
   
-  const handleLaunch = () => {
-    // Launch logic here
-    console.log('Launching duel:', { category, question, stake, deadline, duelType })
-    // Show success animation
+  /**
+   * This function runs when you click "Launch Duel"
+   * Think of it like mailing a letter - we package up all the information
+   * and send it to our server to save in the database
+   */
+  const handleLaunch = async () => {
+    // Step 1: Make sure we have all the required information
+    // Like checking you filled out all the fields on a form
+    if (!category || !question || !stake) {
+      setError('Please fill in all fields')
+      return
+    }
+    
+    // Step 2: Show a loading spinner (like "Please wait...")
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      // Step 3: Calculate when the deadline is
+      // If they picked "24hr", we add 24 hours to now
+      const deadlineDate = new Date(Date.now() + deadline)
+      
+      // Step 4: Send all the information to our server
+      // This is like sending a package - we put everything in a box and mail it
+      const response = await fetch('/api/predictions/create', {
+        method: 'POST', // We're sending data (like mailing a letter)
+        headers: {
+          'Content-Type': 'application/json', // We're sending JSON format
+        },
+        body: JSON.stringify({
+          creatorId: user?.id || 'temp-user-id', // Privy user ID
+          walletAddress: walletAddress, // Wallet address in the correct blockchain format
+          question: question, // The prediction question
+          category: category, // What category
+          stake: stake, // How much SOL
+          deadline: deadlineDate.toISOString(), // When it ends
+          type: duelType, // Public or challenge
+        }),
+      })
+      
+      // Step 5: Check if it worked
+      const data = await response.json()
+      
+      if (!response.ok) {
+        // If something went wrong, show an error
+        throw new Error(data.error || 'Failed to create duel')
+      }
+      
+      // Step 6: Success! Show success message
+      setIsLoading(false)
+      setShowSuccess(true)
+      
+      // Wait 2 seconds to show success message, then navigate
+      setTimeout(() => {
+        router.push(`/duel/${data.prediction.id}`)
+      }, 2000)
+      
+    } catch (err) {
+      // If something went wrong, show an error message
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setIsLoading(false)
+    }
   }
   
   return (
@@ -230,69 +339,105 @@ export default function CreatePage() {
             {/* Step 4: Preview & Launch */}
             {step === 4 && (
               <Card variant="glass" className="p-8">
-                <h2 className="text-3xl font-bold mb-6 text-center">Preview & Launch</h2>
-                
-                <Card variant="default" className="p-6 mb-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
-                      You
+                {showSuccess ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="py-12"
+                  >
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">🎉</div>
+                      <h3 className="text-3xl font-bold text-success mb-2">
+                        Duel Created Successfully!
+                      </h3>
+                      <p className="text-white/80 text-lg mb-4">
+                        Your prediction is live!
+                      </p>
+                      <div className="flex items-center justify-center gap-2 text-white/60">
+                        <Loader2 className="animate-spin" size={20} />
+                        <span>Redirecting to your duel...</span>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold">Your Prediction</div>
-                      <Badge variant="info">{category}</Badge>
+                  </motion.div>
+                ) : (
+                  <>
+                    <h2 className="text-3xl font-bold mb-6 text-center">Preview & Launch</h2>
+                    
+                    <Card variant="default" className="p-6 mb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
+                          You
+                        </div>
+                        <div>
+                          <div className="font-semibold">Your Prediction</div>
+                          <Badge variant="info">{category}</Badge>
+                        </div>
+                      </div>
+                      <h3 className="text-xl font-bold mb-4">{question}</h3>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-white/60">Stake:</span>
+                        <span className="font-bold">{stake.toFixed(2)} SOL</span>
+                      </div>
+                    </Card>
+                    
+                    <div className="text-center mb-6">
+                      <div className="text-2xl font-bold gradient-text mb-2">
+                        Estimated Winnings: {(stake * 1.8).toFixed(2)} SOL
+                      </div>
+                      <div className="text-sm text-white/60">
+                        (if you win)
+                      </div>
                     </div>
-                  </div>
-                  <h3 className="text-xl font-bold mb-4">{question}</h3>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-white/60">Stake:</span>
-                    <span className="font-bold">{stake.toFixed(2)} SOL</span>
-                  </div>
-                </Card>
-                
-                <div className="text-center mb-6">
-                  <div className="text-2xl font-bold gradient-text mb-2">
-                    Estimated Winnings: {(stake * 1.8).toFixed(2)} SOL
-                  </div>
-                  <div className="text-sm text-white/60">
-                    (if you win)
-                  </div>
-                </div>
-                
-                <Button
-                  size="lg"
-                  glow
-                  onClick={handleLaunch}
-                  className="w-full text-lg"
-                >
-                  Launch Duel 🚀
-                </Button>
+                    
+                    {error && (
+                      <div className="mb-4 p-4 bg-danger/20 border border-danger/30 rounded-xl text-danger text-sm">
+                        {error}
+                      </div>
+                    )}
+                  </>
+                )}
               </Card>
             )}
           </motion.div>
         </AnimatePresence>
         
         {/* Navigation Buttons */}
-        <div className="flex justify-between mt-8">
-          <Button
-            variant="ghost"
-            onClick={handleBack}
-            disabled={step === 1}
-          >
-            <ArrowLeft className="mr-2" size={20} />
-            Back
-          </Button>
-          
-          {step < totalSteps ? (
-            <Button onClick={handleNext} disabled={step === 1 && !category || step === 2 && !question}>
-              Next
-              <ArrowRight className="ml-2" size={20} />
+        {!showSuccess && (
+          <div className="flex justify-between mt-8">
+            <Button
+              variant="ghost"
+              onClick={handleBack}
+              disabled={isLoading}
+            >
+              <ArrowLeft className="mr-2" size={20} />
+              {step === 1 ? 'Back to Home' : 'Back'}
             </Button>
-          ) : (
-            <Button onClick={handleLaunch} glow className="w-full">
-              Launch Duel 🚀
-            </Button>
-          )}
-        </div>
+            
+            {step < totalSteps ? (
+              <Button onClick={handleNext} disabled={step === 1 && !category || step === 2 && !question}>
+                Next
+                <ArrowRight className="ml-2" size={20} />
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleLaunch} 
+                glow 
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 animate-spin" size={20} />
+                    Creating Duel...
+                  </>
+                ) : (
+                  <>
+                    Launch Duel 🚀
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
       
       <MobileNav />

@@ -4,15 +4,15 @@ A modern, playful, and highly engaging web interface for PredictDuel - a social 
 
 ## Features
 
-- 🎯 **Landing Page** - Hero section with live activity feed and stats
-- 📱 **Main Feed** - Tinder-style card stack for browsing predictions
-- ⚔️ **Create Duel** - Step-by-step wizard for creating predictions
-- 📊 **Active Duel Detail** - Real-time tracking of predictions
-- 🎉 **Win/Loss Screens** - Celebratory animations and results
-- 🏆 **Leaderboard** - Competitive rankings with top predictors
-- 👤 **Profile** - User stats, achievements, and activity history
-- ⚡ **Lightning Round** - 60-second rapid prediction mode
-- 🔌 **Wallet Integration** - Connect Solana wallets seamlessly
+- **Landing Page** - Hero section with live activity feed and stats
+- **Main Feed** - Tinder-style card stack for browsing predictions
+- **Create Duel** - Step-by-step wizard for creating predictions
+- **Active Duel Detail** - Real-time tracking of predictions
+- **Win/Loss Screens** - Celebratory animations and results
+- **Leaderboard** - Competitive rankings with top predictors
+- **Profile** - User stats, achievements, and activity history
+- **Lightning Round** - 60-second rapid prediction mode
+- **Wallet Integration** - Connect Solana wallets seamlessly
 
 ## Tech Stack
 
@@ -81,12 +81,12 @@ predictduel/
 
 ## Design Highlights
 
-- ✨ Glass morphism effects throughout
-- 🎨 Gradient-heavy aesthetic
-- 🎭 Smooth animations and micro-interactions
-- 📱 Mobile-first responsive design
-- ⚡ Fast, energetic feel
-- 🎉 Satisfying win celebrations
+- Glass morphism effects throughout
+- Gradient-heavy aesthetic
+- Smooth animations and micro-interactions
+- Mobile-first responsive design
+- Fast, energetic feel
+- Satisfying win celebrations
 
 ## Next Steps
 

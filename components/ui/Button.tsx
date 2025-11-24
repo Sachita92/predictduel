@@ -2,7 +2,6 @@
 
 import { ButtonHTMLAttributes, forwardRef, ReactNode, Ref } from 'react'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost'
@@ -14,8 +13,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (props: ButtonProps, ref: Ref<HTMLButtonElement>) => {
-    const { className = '', variant = 'primary', size = 'md', glow = false, children, ...restProps } = props
-    const baseStyles = 'font-semibold rounded-xl transition-all duration-200 active:scale-95 inline-flex items-center justify-center'
+    const { 
+      className = '', 
+      variant = 'primary', 
+      size = 'md', 
+      glow = false, 
+      children, 
+      type = 'button',
+      ...restProps 
+    } = props
+    
+    const baseStyles = 'font-semibold rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed'
     
     const variants = {
       primary: 'gradient-primary text-white shadow-lg hover:shadow-xl',
@@ -32,8 +40,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     }
     
     return (
-      <motion.button
+      <button
         ref={ref}
+        type={type}
         className={cn(
           baseStyles,
           variants[variant as keyof typeof variants],
@@ -41,12 +50,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           glow && 'animate-glow',
           className
         )}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
         {...restProps}
       >
         {children}
-      </motion.button>
+      </button>
     )
   }
 )

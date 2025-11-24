@@ -1,121 +1,122 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { usePrivy } from '@privy-io/react-auth'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, ArrowLeft } from 'lucide-react'
-import Button from '@/components/ui/Button'
-import Card from '@/components/ui/Card'
+import { FaWallet } from 'react-icons/fa'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { ready, authenticated, login } = usePrivy()
-  
+  const { login, authenticated, ready, user } = usePrivy()
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
   useEffect(() => {
-    if (ready && authenticated) {
-      router.push('/')
+    const checkOnboardingAndRedirect = async () => {
+      if (ready && authenticated && user?.id) {
+        try {
+          console.log('Checking onboarding status for user:', user.id)
+          // Check if user has completed onboarding in database
+          const response = await fetch(`/api/onboarding?privyId=${user.id}`)
+          const data = await response.json()
+          
+          console.log('Onboarding status:', data)
+          
+          if (data.completed) {
+            console.log('Onboarding completed, redirecting to home')
+            router.push('/')
+          } else {
+            console.log('Onboarding not completed, redirecting to onboarding')
+            router.push('/onboarding')
+          }
+        } catch (error) {
+          console.error('Error checking onboarding:', error)
+          // Default to onboarding page on error
+          router.push('/onboarding')
+        }
+      }
     }
-  }, [ready, authenticated, router])
-  
-  const handlePrivyLogin = async () => {
+
+    checkOnboardingAndRedirect()
+  }, [ready, authenticated, user?.id, router])
+
+  const handleLogin = async () => {
+    setLoginError(null)
+    setIsLoggingIn(true)
+    
     try {
+      // Privy will show all enabled login methods
       await login()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error)
+      
+      // Provide helpful error messages
+      if (error.message?.includes('rejected')) {
+        setLoginError('❌ You cancelled the connection. Please try again and approve the connection in your wallet.')
+      } else if (error.message?.includes('No wallet')) {
+        setLoginError('❌ No Solana wallet detected. Please install Phantom wallet.')
+      } else if (error.message?.includes('network')) {
+        setLoginError('❌ Network error. Make sure Phantom is on Solana network (not Ethereum).')
+      } else {
+        setLoginError(`❌ Login failed: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsLoggingIn(false)
     }
   }
-  
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-background-dark flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background-dark flex items-center justify-center p-4">
-      {/* Background gradient orbs */}
-      <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          className="absolute top-20 left-10 w-96 h-96 bg-primary-from/30 rounded-full blur-3xl"
-          animate={{
-            x: [0, 100, 0],
-            y: [0, 50, 0],
-            scale: [1, 1.2, 1],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        <motion.div
-          className="absolute bottom-20 right-10 w-96 h-96 bg-primary-to/30 rounded-full blur-3xl"
-          animate={{
-            x: [0, -100, 0],
-            y: [0, -50, 0],
-            scale: [1, 1.2, 1],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      </div>
-      
-      <div className="relative z-10 w-full max-w-md">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="mb-6"
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 max-w-md w-full"
+      >
+        {/* Logo/Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">PredictDuel</h1>
+          <p className="text-slate-400">Sign in to start predicting</p>
+        </div>
+
+        {/* Error Message */}
+        {loginError && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-6"
           >
-            <ArrowLeft size={18} className="mr-2" />
-            Back
-          </Button>
-          
-          <Card variant="glass" className="p-8 text-center">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mb-6"
-            >
-              <div className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center mx-auto mb-4">
-                <Wallet size={40} className="text-white" />
-              </div>
-            </motion.div>
-            
-            <h1 className="text-3xl font-bold mb-2 font-display">
-              Welcome to <span className="gradient-text">PredictDuel</span>
-            </h1>
-            <p className="text-white/70 mb-8">
-              Connect your wallet to start making predictions and winning SOL
-            </p>
-            
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Button
-                size="lg"
-                glow
-                onClick={handlePrivyLogin}
-                className="w-full text-lg"
-                disabled={!ready}
-              >
-                <Wallet size={20} className="mr-2" />
-                Sign up with Privy
-              </Button>
-            </motion.div>
-            
-            <p className="text-sm text-white/50 mt-6">
-              By connecting, you agree to PredictDuel's Terms of Service
-            </p>
-          </Card>
-        </motion.div>
-      </div>
+            <p className="text-red-300 text-sm">{loginError}</p>
+          </motion.div>
+        )}
+
+        {/* Wallet Login Button */}
+        <button
+          onClick={() => handleLogin()}
+          disabled={isLoggingIn}
+          className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+        >
+          <FaWallet className="text-xl" />
+          {isLoggingIn ? 'Connecting...' : 'Connect Wallet'}
+        </button>
+
+        {/* Terms Text */}
+        <p className="text-center text-slate-400 text-xs">
+          By logging in you'll accept the{' '}
+          <span className="text-purple-400">terms and conditions</span> of PredictDuel
+          <br />
+          and also connected with{' '}
+          <span className="text-purple-400">Privy</span>
+        </p>
+      </motion.div>
     </div>
   )
 }
-

@@ -9,16 +9,19 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.0.4",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "@privy-io/react-auth": "^1.54.0",
+    "@solana/web3.js": "^1.98.4",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.294.0",
+    "mongoose": "^8.0.3",
+    "next": "^16.0.3",
+    "react": "^19.2.0",
     "react-confetti": "^6.1.0",
-    "date-fns": "^2.30.0",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.1.0",
-    "@privy-io/react-auth": "^1.54.0"
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0",
+    "tailwind-merge": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -30,4 +33,3 @@
     "typescript": "^5"
   }
 }
-
