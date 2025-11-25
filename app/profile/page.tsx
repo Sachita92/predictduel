@@ -61,8 +61,10 @@ export default function ProfilePage() {
     name: '',
     username: '',
     bio: '',
+    avatar: '',
   })
   const [nameError, setNameError] = useState('')
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
 
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
@@ -87,11 +89,13 @@ export default function ProfilePage() {
         const data = await response.json()
         if (data.user) {
           setProfile(data.user)
-          setEditForm({
-            name: data.user.name || '',
-            username: data.user.username || '',
-            bio: data.user.bio || '',
-          })
+        setEditForm({
+          name: data.user.name || '',
+          username: data.user.username || '',
+          bio: data.user.bio || '',
+          avatar: data.user.avatar || '',
+        })
+        setAvatarPreview(data.user.avatar || null)
         }
       }
     } catch (error) {
@@ -117,7 +121,9 @@ export default function ProfilePage() {
           name: data.user.name || '',
           username: data.user.username || '',
           bio: data.user.bio || '',
+          avatar: data.user.avatar || '',
         })
+        setAvatarPreview(data.user.avatar || null)
       } else {
         // User doesn't exist, auto-create profile
         await createProfile()
@@ -141,6 +147,31 @@ export default function ProfilePage() {
     }
   }, [ready, authenticated, user?.id, fetchProfile])
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB')
+        return
+      }
+
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file')
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result as string
+        setAvatarPreview(result)
+        setEditForm({ ...editForm, avatar: result })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleUpdateProfile = useCallback(async () => {
     // Validate name is required
     if (!editForm.name || editForm.name.trim() === '') {
@@ -161,6 +192,7 @@ export default function ProfilePage() {
           name: editForm.name,
           username: editForm.username,
           bio: editForm.bio,
+          avatar: editForm.avatar,
         }),
       })
 
@@ -171,7 +203,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error updating profile:', error)
     }
-  }, [editForm.name, editForm.username, editForm.bio, user?.id, fetchProfile])
+  }, [editForm.name, editForm.username, editForm.bio, editForm.avatar, user?.id, fetchProfile])
 
 
   if (!ready || loading) {
@@ -213,6 +245,51 @@ export default function ProfilePage() {
           {isEditing ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Edit Profile</h2>
+              
+              {/* Profile Picture Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Profile Picture</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 rounded-full gradient-primary flex items-center justify-center text-4xl font-bold glow-effect overflow-hidden">
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{editForm.name ? editForm.name.charAt(0).toUpperCase() : editForm.username.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                      id="avatar-upload"
+                    />
+                    <label
+                      htmlFor="avatar-upload"
+                      className="inline-block px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 cursor-pointer transition-colors text-sm"
+                    >
+                      Choose Image
+                    </label>
+                    {avatarPreview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarPreview(null)
+                          setEditForm({ ...editForm, avatar: '' })
+                        }}
+                        className="ml-2 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <p className="text-xs text-white/40 mt-2">
+                      JPG, PNG or GIF (max 5MB)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Name <span className="text-danger">*</span>
@@ -260,6 +337,14 @@ export default function ProfilePage() {
                 <Button variant="outline" onClick={() => {
                   setIsEditing(false)
                   setNameError('')
+                  // Reset avatar preview to original
+                  setAvatarPreview(profile?.avatar || null)
+                  setEditForm({
+                    name: profile?.name || '',
+                    username: profile?.username || '',
+                    bio: profile?.bio || '',
+                    avatar: profile?.avatar || '',
+                  })
                 }}>
                   Cancel
                 </Button>
@@ -268,8 +353,12 @@ export default function ProfilePage() {
           ) : (
             <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-full gradient-primary flex items-center justify-center text-4xl font-bold glow-effect">
-                  {profile.avatar || (profile.name ? profile.name.charAt(0).toUpperCase() : profile.username.charAt(0).toUpperCase())}
+                <div className="w-24 h-24 rounded-full gradient-primary flex items-center justify-center text-4xl font-bold glow-effect overflow-hidden">
+                  {profile.avatar ? (
+                    <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{profile.name ? profile.name.charAt(0).toUpperCase() : profile.username.charAt(0).toUpperCase()}</span>
+                  )}
                 </div>
                 <div>
                   {profile.name && (
