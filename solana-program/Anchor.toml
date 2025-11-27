@@ -1,0 +1,22 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+predict_duel = "6mARKQvXqL6eRsFJ9THfzUZNj3YQqvRjUCEkJAGxNqXn"
+
+[programs.devnet]
+predict_duel = "6mARKQvXqL6eRsFJ9THfzUZNj3YQqvRjUCEkJAGxNqXn"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+

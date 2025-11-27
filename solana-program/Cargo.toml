@@ -1,0 +1,29 @@
+[package]
+name = "predict-duel"
+version = "0.1.0"
+description = "Prediction Market Smart Contract for Solana"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "predict_duel"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.1"
+anchor-spl = "0.30.1"
+
+[dev-dependencies]
+solana-program-test = "1.17"
+solana-sdk = "1.17"
+tokio = "1.35"
+
+[profile.release]
+overflow-checks = true
+

@@ -1,0 +1,43 @@
+# Build
+target/
+.anchor/
+dist/
+
+# IDL
+**/*.so
+**/*.wasm
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Testing
+.DS_Store
+test-ledger/
+
+# Keys (NEVER commit these!)
+*.json
+!package.json
+!tsconfig.json
+
+# Solana
+.config/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# Backup files
+*.bak
+
+# Documentation (local setup guides)
+START_HERE.md
+UBUNTU_SETUP.md
+WORKFLOW.md
+QUICKSTART.md
+INTEGRATION.md
+DEPLOYMENT.md
