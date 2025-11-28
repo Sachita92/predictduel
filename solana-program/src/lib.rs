@@ -47,7 +47,7 @@ pub mod predict_duel {
         market.total_participants = 0;
         market.outcome = None;
         market.created_at = clock.unix_timestamp;
-        market.bump = ctx.bumps.market;
+        market.bump = *ctx.bumps.get("market").unwrap();
 
         msg!("Market created: {}", market.question);
         
@@ -97,7 +97,7 @@ pub mod predict_duel {
             participant.prediction = prediction;
             participant.stake = stake_amount;
             participant.claimed = false;
-            participant.bump = ctx.bumps.participant;
+            participant.bump = *ctx.bumps.get("participant").unwrap();
             
             market.total_participants += 1;
         } else {
