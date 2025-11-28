@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("6mARKQvXqL6eRsFJ9THfzUZNj3YQqvRjUCEkJAGxNqXn");
+declare_id!("HYm1YuFYyje2FfQ1tLCa17QUMGAR11ZCa6HJKzHhcACD");
 
 #[program]
 pub mod predict_duel {
@@ -42,6 +42,8 @@ pub mod predict_duel {
         market.pool_size = 0;
         market.yes_count = 0;
         market.no_count = 0;
+        market.yes_pool = 0;
+        market.no_pool = 0;
         market.total_participants = 0;
         market.outcome = None;
         market.created_at = clock.unix_timestamp;
@@ -77,14 +79,13 @@ pub mod predict_duel {
         );
 
         // Transfer SOL from bettor to market vault
-        let transfer_instruction = anchor_lang::system_program::Transfer {
-            from: ctx.accounts.bettor.to_account_info(),
-            to: ctx.accounts.market_vault.to_account_info(),
-        };
         anchor_lang::system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
-                transfer_instruction,
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.bettor.to_account_info(),
+                    to: ctx.accounts.market_vault.to_account_info(),
+                },
             ),
             stake_amount,
         )?;
@@ -108,8 +109,10 @@ pub mod predict_duel {
         market.pool_size += stake_amount;
         if prediction {
             market.yes_count += 1;
+            market.yes_pool += stake_amount;
         } else {
             market.no_count += 1;
+            market.no_pool += stake_amount;
         }
 
         // Activate market if it was pending
@@ -182,19 +185,25 @@ pub mod predict_duel {
         let won = participant.prediction == outcome;
         require!(won, PredictDuelError::NotAWinner);
 
-        // Calculate payout
-        let winning_pool = if outcome {
-            market.yes_count
+        // Calculate payout based on proportional share of winning pool
+        let winning_pool_stake = if outcome {
+            market.yes_pool
         } else {
-            market.no_count
+            market.no_pool
         };
 
-        // Payout = (participant_stake / winning_pool) * total_pool
+        require!(
+            winning_pool_stake > 0,
+            PredictDuelError::MarketNotActive
+        );
+
+        // Payout = (participant_stake / winning_pool_stake) * total_pool
         // Use u128 to prevent overflow
         let payout = ((participant.stake as u128)
             .checked_mul(market.pool_size as u128)
             .unwrap()
-            / (winning_pool as u128 * participant.stake as u128)) as u64;
+            .checked_div(winning_pool_stake as u128)
+            .unwrap()) as u64;
 
         // Transfer winnings from vault to winner
         let market_key = market.key();
@@ -205,14 +214,13 @@ pub mod predict_duel {
         ];
         let signer = &[&seeds[..]];
 
-        let transfer_instruction = anchor_lang::system_program::Transfer {
-            from: ctx.accounts.market_vault.to_account_info(),
-            to: ctx.accounts.winner.to_account_info(),
-        };
         anchor_lang::system_program::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.system_program.to_account_info(),
-                transfer_instruction,
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.market_vault.to_account_info(),
+                    to: ctx.accounts.winner.to_account_info(),
+                },
                 signer,
             ),
             payout,
@@ -277,14 +285,13 @@ pub mod predict_duel {
         ];
         let signer = &[&seeds[..]];
 
-        let transfer_instruction = anchor_lang::system_program::Transfer {
-            from: ctx.accounts.market_vault.to_account_info(),
-            to: ctx.accounts.bettor.to_account_info(),
-        };
         anchor_lang::system_program::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.system_program.to_account_info(),
-                transfer_instruction,
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.market_vault.to_account_info(),
+                    to: ctx.accounts.bettor.to_account_info(),
+                },
                 signer,
             ),
             refund_amount,
@@ -439,6 +446,8 @@ pub struct Market {
     pub pool_size: u64,
     pub yes_count: u32,
     pub no_count: u32,
+    pub yes_pool: u64,
+    pub no_pool: u64,
     pub total_participants: u32,
     pub outcome: Option<bool>,
     pub created_at: i64,
