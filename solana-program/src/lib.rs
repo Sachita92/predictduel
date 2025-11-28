@@ -32,6 +32,14 @@ pub mod predict_duel {
             PredictDuelError::InvalidDeadline
         );
 
+        // Store bump from Anchor's automatic derivation
+        market.bump = ctx.bumps.market;
+        market.vault_bump = ctx.bumps.market_vault;
+
+        // Calculate and store question hash for PDA derivation
+        let question_hash = anchor_lang::solana_program::keccak::hash(question.as_bytes());
+        market.question_hash = question_hash.to_bytes();
+
         market.creator = ctx.accounts.creator.key();
         market.question = question;
         market.category = category;
@@ -47,7 +55,6 @@ pub mod predict_duel {
         market.total_participants = 0;
         market.outcome = None;
         market.created_at = clock.unix_timestamp;
-        market.bump = *ctx.bumps.get("market").unwrap();
 
         msg!("Market created: {}", market.question);
         
@@ -97,7 +104,8 @@ pub mod predict_duel {
             participant.prediction = prediction;
             participant.stake = stake_amount;
             participant.claimed = false;
-            participant.bump = *ctx.bumps.get("participant").unwrap();
+            // Store bump from Anchor's automatic derivation
+            participant.bump = ctx.bumps.participant;
             
             market.total_participants += 1;
         } else {
@@ -206,11 +214,12 @@ pub mod predict_duel {
             .unwrap()) as u64;
 
         // Transfer winnings from vault to winner
-        let market_key = market.key();
+        // Use the vault's bump stored in market account
         let seeds = &[
-            b"market_vault".as_ref(),
-            market_key.as_ref(),
-            &[market.bump],
+            b"market_vault",
+            market.creator.as_ref(),
+            &market.question_hash[..8],
+            &[market.vault_bump],
         ];
         let signer = &[&seeds[..]];
 
@@ -277,11 +286,12 @@ pub mod predict_duel {
         let refund_amount = participant.stake;
 
         // Transfer refund from vault to participant
-        let market_key = market.key();
+        // Use the vault's bump stored in market account
         let seeds = &[
-            b"market_vault".as_ref(),
-            market_key.as_ref(),
-            &[market.bump],
+            b"market_vault",
+            market.creator.as_ref(),
+            &market.question_hash[..8],
+            &[market.vault_bump],
         ];
         let signer = &[&seeds[..]];
 
@@ -316,7 +326,11 @@ pub struct CreateMarket<'info> {
         init,
         payer = creator,
         space = 8 + Market::INIT_SPACE,
-        seeds = [b"market", creator.key().as_ref(), question.as_bytes()],
+        seeds = [
+            b"market",
+            creator.key().as_ref(),
+            &anchor_lang::solana_program::keccak::hash(question.as_bytes()).to_bytes()[..8]
+        ],
         bump
     )]
     pub market: Account<'info, Market>,
@@ -326,9 +340,15 @@ pub struct CreateMarket<'info> {
     
     /// CHECK: This is the vault that holds all stakes
     #[account(
-        mut,
-        seeds = [b"market_vault", market.key().as_ref()],
-        bump
+        init,
+        payer = creator,
+        seeds = [
+            b"market_vault",
+            creator.key().as_ref(),
+            &anchor_lang::solana_program::keccak::hash(question.as_bytes()).to_bytes()[..8]
+        ],
+        bump,
+        space = 8 // Minimum space for a system account
     )]
     pub market_vault: AccountInfo<'info>,
     
@@ -355,7 +375,11 @@ pub struct PlaceBet<'info> {
     /// CHECK: This is the vault that holds all stakes
     #[account(
         mut,
-        seeds = [b"market_vault", market.key().as_ref()],
+        seeds = [
+            b"market_vault",
+            market.creator.as_ref(),
+            &market.question_hash[..8]
+        ],
         bump
     )]
     pub market_vault: AccountInfo<'info>,
@@ -379,7 +403,7 @@ pub struct ClaimWinnings<'info> {
     #[account(
         mut,
         seeds = [b"participant", market.key().as_ref(), winner.key().as_ref()],
-        bump = participant.bump
+        bump
     )]
     pub participant: Account<'info, Participant>,
     
@@ -389,7 +413,11 @@ pub struct ClaimWinnings<'info> {
     /// CHECK: This is the vault that holds all stakes
     #[account(
         mut,
-        seeds = [b"market_vault", market.key().as_ref()],
+        seeds = [
+            b"market_vault",
+            market.creator.as_ref(),
+            &market.question_hash[..8]
+        ],
         bump
     )]
     pub market_vault: AccountInfo<'info>,
@@ -413,7 +441,7 @@ pub struct RefundStake<'info> {
     #[account(
         mut,
         seeds = [b"participant", market.key().as_ref(), bettor.key().as_ref()],
-        bump = participant.bump
+        bump
     )]
     pub participant: Account<'info, Participant>,
     
@@ -423,7 +451,11 @@ pub struct RefundStake<'info> {
     /// CHECK: This is the vault that holds all stakes
     #[account(
         mut,
-        seeds = [b"market_vault", market.key().as_ref()],
+        seeds = [
+            b"market_vault",
+            market.creator.as_ref(),
+            &market.question_hash[..8]
+        ],
         bump
     )]
     pub market_vault: AccountInfo<'info>,
@@ -438,6 +470,7 @@ pub struct Market {
     pub creator: Pubkey,
     #[max_len(200)]
     pub question: String,
+    pub question_hash: [u8; 32], // Store hash for PDA derivation
     pub category: MarketCategory,
     pub stake_amount: u64,
     pub deadline: i64,
@@ -452,6 +485,7 @@ pub struct Market {
     pub outcome: Option<bool>,
     pub created_at: i64,
     pub bump: u8,
+    pub vault_bump: u8, // Store vault bump for CPI signing
 }
 
 #[account]
@@ -520,4 +554,3 @@ pub enum PredictDuelError {
     #[msg("Market is not cancelled")]
     MarketNotCancelled,
 }
-
