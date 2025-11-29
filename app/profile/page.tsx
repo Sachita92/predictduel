@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Edit, Trophy, TrendingUp, Target, Award, Loader2 } from 'lucide-react'
+import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet } from 'lucide-react'
 import { usePrivy } from '@privy-io/react-auth'
 import { useRouter } from 'next/navigation'
 import TopNav from '@/components/navigation/TopNav'
@@ -12,6 +12,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { getWalletAddress } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
+import { getWalletBalance, formatBalance } from '@/lib/wallet-balance'
 
 interface UserProfile {
   id: string
@@ -57,6 +58,8 @@ export default function ProfilePage() {
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  const [balance, setBalance] = useState<number | null>(null)
+  const [loadingBalance, setLoadingBalance] = useState(true)
   const [editForm, setEditForm] = useState({
     name: '',
     username: '',
@@ -146,6 +149,24 @@ export default function ProfilePage() {
       fetchProfile()
     }
   }, [ready, authenticated, user?.id, fetchProfile])
+
+  // Fetch wallet balance
+  useEffect(() => {
+    if (walletAddress) {
+      const fetchBalance = async () => {
+        try {
+          setLoadingBalance(true)
+          const bal = await getWalletBalance(walletAddress)
+          setBalance(bal)
+        } catch (error) {
+          console.error('Error fetching balance:', error)
+        } finally {
+          setLoadingBalance(false)
+        }
+      }
+      fetchBalance()
+    }
+  }, [walletAddress])
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -337,7 +358,6 @@ export default function ProfilePage() {
                 <Button variant="outline" onClick={() => {
                   setIsEditing(false)
                   setNameError('')
-                  // Reset avatar preview to original
                   setAvatarPreview(profile?.avatar || null)
                   setEditForm({
                     name: profile?.name || '',
@@ -369,9 +389,23 @@ export default function ProfilePage() {
                     {profile.bio || 'No bio yet'}
                   </p>
                   {walletAddress && (
-                    <p className="text-xs text-white/40 mb-4 font-mono">
-                      {walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}
-                    </p>
+                    <>
+                      <p className="text-xs text-white/40 mb-2 font-mono">
+                        {walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}
+                      </p>
+                      <div className="mb-4 flex items-center gap-2">
+                        {loadingBalance ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-primary-from" />
+                        ) : (
+                          <>
+                            <Wallet size={18} className="text-primary-from" />
+                            <span className="text-lg font-bold gradient-text">
+                              {balance !== null ? formatBalance(balance) : '0'} {currency}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                   <div className="flex gap-4">
                     <div>

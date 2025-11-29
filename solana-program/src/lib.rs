@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 declare_id!("HYm1YuFYyje2FfQ1tLCa17QUMGAR11ZCa6HJKzHhcACD");
 
@@ -10,6 +9,7 @@ pub mod predict_duel {
     /// Create a new prediction market
     pub fn create_market(
         ctx: Context<CreateMarket>,
+        market_index: u64,
         question: String,
         category: MarketCategory,
         stake_amount: u64,
@@ -32,15 +32,12 @@ pub mod predict_duel {
             PredictDuelError::InvalidDeadline
         );
 
-        // Store bump from Anchor's automatic derivation
-        market.bump = ctx.bumps.market;
-        market.vault_bump = ctx.bumps.market_vault;
-
-        // Calculate and store question hash for PDA derivation
-        let question_hash = anchor_lang::solana_program::keccak::hash(question.as_bytes());
-        market.question_hash = question_hash.to_bytes();
+        // Store bump - in Anchor 0.28, bumps is a BTreeMap
+        market.bump = *ctx.bumps.get("market").unwrap();
+        market.vault_bump = *ctx.bumps.get("market_vault").unwrap();
 
         market.creator = ctx.accounts.creator.key();
+        market.market_index = market_index;
         market.question = question;
         market.category = category;
         market.stake_amount = stake_amount;
@@ -104,8 +101,8 @@ pub mod predict_duel {
             participant.prediction = prediction;
             participant.stake = stake_amount;
             participant.claimed = false;
-            // Store bump from Anchor's automatic derivation
-            participant.bump = ctx.bumps.participant;
+            // Store bump - in Anchor 0.28, bumps is a BTreeMap
+            participant.bump = *ctx.bumps.get("participant").unwrap();
             
             market.total_participants += 1;
         } else {
@@ -218,7 +215,7 @@ pub mod predict_duel {
         let seeds = &[
             b"market_vault",
             market.creator.as_ref(),
-            &market.question_hash[..8],
+            &market.market_index.to_le_bytes(),
             &[market.vault_bump],
         ];
         let signer = &[&seeds[..]];
@@ -290,7 +287,7 @@ pub mod predict_duel {
         let seeds = &[
             b"market_vault",
             market.creator.as_ref(),
-            &market.question_hash[..8],
+            &market.market_index.to_le_bytes(),
             &[market.vault_bump],
         ];
         let signer = &[&seeds[..]];
@@ -320,16 +317,16 @@ pub mod predict_duel {
 
 // Account validation structs
 #[derive(Accounts)]
-#[instruction(question: String)]
+#[instruction(market_index: u64)]
 pub struct CreateMarket<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + Market::INIT_SPACE,
+        space = 8 + 32 + 8 + (4 + 200) + 1 + 8 + 8 + 1 + 1 + 8 + 4 + 4 + 8 + 8 + 4 + 1 + 8 + 1 + 1,
         seeds = [
             b"market",
             creator.key().as_ref(),
-            &anchor_lang::solana_program::keccak::hash(question.as_bytes()).to_bytes()[..8]
+            &market_index.to_le_bytes()
         ],
         bump
     )]
@@ -345,7 +342,7 @@ pub struct CreateMarket<'info> {
         seeds = [
             b"market_vault",
             creator.key().as_ref(),
-            &anchor_lang::solana_program::keccak::hash(question.as_bytes()).to_bytes()[..8]
+            &market_index.to_le_bytes()
         ],
         bump,
         space = 8 // Minimum space for a system account
@@ -363,7 +360,7 @@ pub struct PlaceBet<'info> {
     #[account(
         init_if_needed,
         payer = bettor,
-        space = 8 + Participant::INIT_SPACE,
+        space = 8 + 32 + 32 + 1 + 8 + 1 + 1,
         seeds = [b"participant", market.key().as_ref(), bettor.key().as_ref()],
         bump
     )]
@@ -378,7 +375,7 @@ pub struct PlaceBet<'info> {
         seeds = [
             b"market_vault",
             market.creator.as_ref(),
-            &market.question_hash[..8]
+            &market.market_index.to_le_bytes()
         ],
         bump
     )]
@@ -416,7 +413,7 @@ pub struct ClaimWinnings<'info> {
         seeds = [
             b"market_vault",
             market.creator.as_ref(),
-            &market.question_hash[..8]
+            &market.market_index.to_le_bytes()
         ],
         bump
     )]
@@ -454,7 +451,7 @@ pub struct RefundStake<'info> {
         seeds = [
             b"market_vault",
             market.creator.as_ref(),
-            &market.question_hash[..8]
+            &market.market_index.to_le_bytes()
         ],
         bump
     )]
@@ -465,12 +462,10 @@ pub struct RefundStake<'info> {
 
 // State structs
 #[account]
-#[derive(InitSpace)]
 pub struct Market {
     pub creator: Pubkey,
-    #[max_len(200)]
+    pub market_index: u64,
     pub question: String,
-    pub question_hash: [u8; 32], // Store hash for PDA derivation
     pub category: MarketCategory,
     pub stake_amount: u64,
     pub deadline: i64,
@@ -485,22 +480,21 @@ pub struct Market {
     pub outcome: Option<bool>,
     pub created_at: i64,
     pub bump: u8,
-    pub vault_bump: u8, // Store vault bump for CPI signing
+    pub vault_bump: u8,
 }
 
 #[account]
-#[derive(InitSpace)]
 pub struct Participant {
     pub market: Pubkey,
     pub bettor: Pubkey,
-    pub prediction: bool, // true = yes, false = no
+    pub prediction: bool,
     pub stake: u64,
     pub claimed: bool,
     pub bump: u8,
 }
 
 // Enums
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum MarketCategory {
     Crypto,
     Weather,
@@ -510,13 +504,13 @@ pub enum MarketCategory {
     Other,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum MarketType {
     Public,
     Challenge,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum MarketStatus {
     Pending,
     Active,

@@ -35,9 +35,11 @@ test-ledger/
 *.bak
 
 # Documentation (local setup guides)
-START_HERE.md
-UBUNTU_SETUP.md
-WORKFLOW.md
-QUICKSTART.md
-INTEGRATION.md
-DEPLOYMENT.md
+# START_HERE.md
+# UBUNTU_SETUP.md
+# WORKFLOW.md
+# QUICKSTART.md
+# INTEGRATION.md
+# DEPLOYMENT.md
+# ANCHOR_BUILD_FAILURE_ANALYSIS.md
+# FIXES_APPLIED.md

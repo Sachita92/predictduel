@@ -8,7 +8,6 @@ import TopNav from '@/components/navigation/TopNav'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
-import WalletChecker from '@/components/debug/WalletChecker'
 
 export default function Home() {
   const router = useRouter()
@@ -221,9 +220,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-      
-      {/* Wallet Checker - Debug Tool */}
-      <WalletChecker />
     </div>
   )
 }
