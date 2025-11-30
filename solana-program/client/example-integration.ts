@@ -8,8 +8,8 @@ import { PredictDuelClient, MarketCategory, MarketType } from './sdk';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 
-// Program ID - Update this after deployment
-const PROGRAM_ID = new PublicKey('6mARKQvXqL6eRsFJ9THfzUZNj3YQqvRjUCEkJAGxNqXn');
+// Program ID - Deployed to devnet
+const PROGRAM_ID = new PublicKey('hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr');
 
 // Solana RPC endpoints
 const ENDPOINTS = {
