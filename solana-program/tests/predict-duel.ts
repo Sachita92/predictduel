@@ -13,16 +13,13 @@ describe("predict-duel", () => {
   const programId = new PublicKey("hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr");
   const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
   const idlJson = fs.readFileSync(idlPath, "utf8");
-  const idl = JSON.parse(idlJson) as any; // Use 'any' to bypass metadata type checking
+  let idl: any = JSON.parse(idlJson);
   
-  // Ensure metadata has address
-  if (!idl.metadata) {
-    idl.metadata = { address: programId.toString() };
-  } else {
-    idl.metadata.address = programId.toString();
-  }
+  // Remove metadata entirely - let Anchor use the programId parameter instead
+  delete idl.metadata;
   
   // @ts-ignore - bypass type checking for Program constructor
+  // Program constructor: (idl, programId, provider)
   const program: any = new Program(idl as Idl, programId, provider);
 
   // Test accounts
