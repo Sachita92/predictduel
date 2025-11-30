@@ -5,16 +5,16 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-predict_duel = "HYm1YuFYyje2FfQ1tLCa17QUMGAR11ZCa6HJKzHhcACD"
+predict_duel = "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr"
 
 [programs.devnet]
-predict_duel = "HYm1YuFYyje2FfQ1tLCa17QUMGAR11ZCa6HJKzHhcACD"
+predict_duel = "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
