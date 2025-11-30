@@ -1,14 +1,18 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { PredictDuel } from "../target/types/predict_duel";
+import { Program, Idl } from "@coral-xyz/anchor";
 import { assert } from "chai";
+import { PublicKey } from "@solana/web3.js";
 
 describe("predict-duel", () => {
   // Configure the client to use the local cluster
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.PredictDuel as Program<PredictDuel>;
+  // Load program explicitly - using require like in SDK
+  const programId = new PublicKey("hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr");
+  const idl = require("../target/idl/predict_duel.json");
+  // @ts-ignore - TypeScript has issues with Program constructor parameter order
+  const program: any = new Program(idl as Idl, programId, provider);
   
   // Test accounts
   const creator = anchor.web3.Keypair.generate();
