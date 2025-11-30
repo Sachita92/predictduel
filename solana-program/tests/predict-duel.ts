@@ -2,24 +2,36 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, Idl } from "@coral-xyz/anchor";
 import { assert } from "chai";
 import { PublicKey } from "@solana/web3.js";
+import * as fs from "fs";
+import * as path from "path";
 
 describe("predict-duel", () => {
-  // Configure the client to use the local cluster
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  // Load program explicitly - using require like in SDK
+  // Load program explicitly from IDL file
   const programId = new PublicKey("hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr");
-  const idl = require("../target/idl/predict_duel.json");
-  // @ts-ignore - TypeScript has issues with Program constructor parameter order
-  const program: any = new Program(idl as Idl, programId, provider);
+  const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
+  const idlJson = fs.readFileSync(idlPath, "utf8");
+  const idl = JSON.parse(idlJson) as any; // Use 'any' to bypass metadata type checking
   
+  // Ensure metadata has address
+  if (!idl.metadata) {
+    idl.metadata = { address: programId.toString() };
+  } else {
+    idl.metadata.address = programId.toString();
+  }
+  
+  // @ts-ignore - bypass type checking for Program constructor
+  const program: any = new Program(idl as Idl, programId, provider);
+
   // Test accounts
   const creator = anchor.web3.Keypair.generate();
   const bettor1 = anchor.web3.Keypair.generate();
   const bettor2 = anchor.web3.Keypair.generate();
 
   // Market parameters
+  const marketIndex = new anchor.BN(1);
   const question = "Will Bitcoin hit $100,000 by end of 2024?";
   const stakeAmount = new anchor.BN(100_000_000); // 0.1 SOL
 
@@ -49,24 +61,30 @@ describe("predict-duel", () => {
   });
 
   it("Creates a prediction market", async () => {
-    const deadline = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
+    const deadline = Math.floor(Date.now() / 1000) + 86400;
 
+    // FIXED: Use market_index instead of question for PDA seeds
     [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
         creator.publicKey.toBuffer(),
-        Buffer.from(question),
+        marketIndex.toArrayLike(Buffer, "le", 8),
       ],
       program.programId
     );
 
     [marketVaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), marketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.publicKey.toBuffer(),
+        marketIndex.toArrayLike(Buffer, "le", 8),
+      ],
       program.programId
     );
 
     await program.methods
       .createMarket(
+        marketIndex,
         question,
         { crypto: {} },
         stakeAmount,
@@ -147,10 +165,7 @@ describe("predict-duel", () => {
       .rpc();
 
     const market = await program.account.market.fetch(marketPda);
-    assert.equal(
-      market.poolSize.toNumber(),
-      stakeAmount.toNumber() * 2
-    );
+    assert.equal(market.poolSize.toNumber(), stakeAmount.toNumber() * 2);
     assert.equal(market.yesCount, 1);
     assert.equal(market.noCount, 1);
     assert.equal(market.totalParticipants, 2);
@@ -166,7 +181,7 @@ describe("predict-duel", () => {
         })
         .signers([creator])
         .rpc();
-      
+
       assert.fail("Should have failed to resolve before deadline");
     } catch (error) {
       assert.include(error.toString(), "MarketNotExpired");
@@ -174,30 +189,32 @@ describe("predict-duel", () => {
   });
 
   it("Resolves the market (outcome: YES)", async () => {
-    // Wait for deadline to pass (in production, you'd adjust the deadline)
-    // For testing, we'll simulate time passing
-    
-    // We need to create a new market with a past deadline for this test
     const pastDeadline = Math.floor(Date.now() / 1000) - 1;
+    const marketIndex2 = new anchor.BN(2);
     const question2 = "Test market with past deadline";
-    
+
+    // FIXED: Use market_index for PDAs
     const [testMarketPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
         creator.publicKey.toBuffer(),
-        Buffer.from(question2),
+        marketIndex2.toArrayLike(Buffer, "le", 8),
       ],
       program.programId
     );
 
     const [testVaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), testMarketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.publicKey.toBuffer(),
+        marketIndex2.toArrayLike(Buffer, "le", 8),
+      ],
       program.programId
     );
 
-    // Create market with past deadline
     await program.methods
       .createMarket(
+        marketIndex2,
         question2,
         { crypto: {} },
         stakeAmount,
@@ -213,7 +230,6 @@ describe("predict-duel", () => {
       .signers([creator])
       .rpc();
 
-    // Place bets
     const [testParticipant1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("participant"),
@@ -235,7 +251,6 @@ describe("predict-duel", () => {
       .signers([bettor1])
       .rpc();
 
-    // Resolve market
     await program.methods
       .resolveMarket(true)
       .accounts({
@@ -250,19 +265,23 @@ describe("predict-duel", () => {
   });
 
   it("Allows winner to claim winnings", async () => {
-    // Using the resolved test market from previous test
-    const question2 = "Test market with past deadline";
+    const marketIndex2 = new anchor.BN(2);
+
     const [testMarketPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
         creator.publicKey.toBuffer(),
-        Buffer.from(question2),
+        marketIndex2.toArrayLike(Buffer, "le", 8),
       ],
       program.programId
     );
 
     const [testVaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), testMarketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.publicKey.toBuffer(),
+        marketIndex2.toArrayLike(Buffer, "le", 8),
+      ],
       program.programId
     );
 
@@ -303,6 +322,7 @@ describe("predict-duel", () => {
   });
 
   it("Cancels a market with no participants", async () => {
+    const marketIndex3 = new anchor.BN(3);
     const question3 = "Market to be cancelled";
     const futureDeadline = Math.floor(Date.now() / 1000) + 86400;
 
@@ -310,18 +330,23 @@ describe("predict-duel", () => {
       [
         Buffer.from("market"),
         creator.publicKey.toBuffer(),
-        Buffer.from(question3),
+        marketIndex3.toArrayLike(Buffer, "le", 8),
       ],
       program.programId
     );
 
     const [cancelVaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), cancelMarketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.publicKey.toBuffer(),
+        marketIndex3.toArrayLike(Buffer, "le", 8),
+      ],
       program.programId
     );
 
     await program.methods
       .createMarket(
+        marketIndex3,
         question3,
         { sports: {} },
         stakeAmount,
@@ -353,4 +378,3 @@ describe("predict-duel", () => {
     );
   });
 });
-
