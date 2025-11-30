@@ -15,12 +15,14 @@ describe("predict-duel", () => {
   const idlJson = fs.readFileSync(idlPath, "utf8");
   let idl: any = JSON.parse(idlJson);
   
-  // Remove metadata entirely - let Anchor use the programId parameter instead
-  delete idl.metadata;
+  // Ensure metadata exists with the correct address (required by Anchor)
+  if (!idl.metadata) {
+    idl.metadata = {};
+  }
+  idl.metadata.address = programId.toString();
   
-  // @ts-ignore - bypass type checking for Program constructor
-  // Program constructor: (idl, programId, provider)
-  const program: any = new Program(idl as Idl, programId, provider);
+  // Program constructor: (idl, provider) - programId is extracted from metadata
+  const program = new Program(idl as Idl, provider) as any;
 
   // Test accounts
   const creator = anchor.web3.Keypair.generate();
