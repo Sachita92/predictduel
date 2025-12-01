@@ -7,28 +7,56 @@ import * as path from "path";
 
 describe("predict-duel", () => {
   const provider = anchor.AnchorProvider.env();
+  
+  // Ensure provider is valid
+  if (!provider) {
+    throw new Error("Provider is undefined. Make sure ANCHOR_PROVIDER_URL and ANCHOR_WALLET are set.");
+  }
+  
   anchor.setProvider(provider);
 
-  // Load IDL as JSON first to manipulate if needed
-  const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
-  const idlJson = JSON.parse(fs.readFileSync(idlPath, "utf8"));
+  // Try to use workspace first (standard Anchor pattern for tests)
+  // If workspace is not available, fall back to manual IDL loading
+  let program: any;
+  let programId: PublicKey;
   
-  // Get program ID - prefer IDL metadata, fallback to explicit value
-  const programIdString = (idlJson.metadata && idlJson.metadata.address) 
-    ? idlJson.metadata.address 
-    : "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
-  const programId = new PublicKey(programIdString);
-  
-  // Ensure IDL metadata address matches our programId to avoid conflicts
-  if (!idlJson.metadata) {
-    idlJson.metadata = {};
+  try {
+    // Try workspace pattern - this is the recommended way in Anchor tests
+    // Workspace is populated by Anchor from Anchor.toml
+    const workspace = anchor.workspace as any;
+    if (workspace && workspace.PredictDuel) {
+      program = workspace.PredictDuel;
+      programId = program.programId;
+    } else {
+      throw new Error("Workspace not available");
+    }
+  } catch (e) {
+    // Fallback: manually load IDL and create Program
+    const idlRaw = require("../target/idl/predict_duel.json");
+    
+    // Get program ID from IDL metadata
+    const programIdString = idlRaw.metadata?.address || "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
+    
+    if (!programIdString || typeof programIdString !== 'string') {
+      throw new Error(`Invalid program ID: ${programIdString}`);
+    }
+    
+    // Create PublicKey first to ensure it's valid
+    programId = new PublicKey(programIdString);
+    
+    // Ensure IDL metadata has the correct address (use type assertion to avoid TypeScript errors)
+    const idl: Idl = JSON.parse(JSON.stringify(idlRaw)); // Deep clone to avoid mutations
+    if (!idl.metadata) {
+      idl.metadata = { address: programIdString } as any;
+    } else {
+      (idl.metadata as any).address = programIdString;
+    }
+    
+    // Create Program instance - Program constructor extracts programId from IDL metadata
+    // Signature: new Program(idl, provider) when programId is in metadata
+    program = new Program(idl, provider);
+    programId = program.programId;
   }
-  idlJson.metadata.address = programIdString;
-  
-  const idl = idlJson as Idl;
-  
-  // Create program instance - use type assertion to avoid TypeScript issues
-  const program = new (Program as any)(idl, programId, provider) as any;
 
   // Test accounts
   const creator = anchor.web3.Keypair.generate();
