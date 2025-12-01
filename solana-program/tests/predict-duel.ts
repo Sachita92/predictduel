@@ -9,14 +9,25 @@ describe("predict-duel", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  // Load program explicitly from IDL file - use require like client/sdk.ts
-  const programId = new PublicKey("hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr");
+  // Load IDL as JSON first to manipulate if needed
+  const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
+  const idlJson = JSON.parse(fs.readFileSync(idlPath, "utf8"));
   
-  // Load IDL exactly like client/sdk.ts does (no modifications)
-  const idl = require("../target/idl/predict_duel.json") as Idl;
+  // Get program ID - prefer IDL metadata, fallback to explicit value
+  const programIdString = (idlJson.metadata && idlJson.metadata.address) 
+    ? idlJson.metadata.address 
+    : "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
+  const programId = new PublicKey(programIdString);
   
-  // Program constructor: use exact same pattern as client/sdk.ts
-  // Type assertion needed due to TypeScript signature mismatch in Anchor 0.30
+  // Ensure IDL metadata address matches our programId to avoid conflicts
+  if (!idlJson.metadata) {
+    idlJson.metadata = {};
+  }
+  idlJson.metadata.address = programIdString;
+  
+  const idl = idlJson as Idl;
+  
+  // Create program instance - use type assertion to avoid TypeScript issues
   const program = new (Program as any)(idl, programId, provider) as any;
 
   // Test accounts
