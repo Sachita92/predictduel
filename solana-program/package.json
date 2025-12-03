@@ -10,7 +10,7 @@
     "deploy": "anchor deploy"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.32.1",
+    "@coral-xyz/anchor": "^0.28.0",
     "@solana/web3.js": "^1.87.6"
   },
   "devDependencies": {
