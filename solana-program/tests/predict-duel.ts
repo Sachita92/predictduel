@@ -24,8 +24,9 @@ describe("predict-duel", () => {
     // Try workspace pattern - this is the recommended way in Anchor tests
     // Workspace is populated by Anchor from Anchor.toml
     const workspace = anchor.workspace as any;
-    if (workspace && workspace.PredictDuel) {
-      program = workspace.PredictDuel;
+    // Try different possible program name variations
+    if (workspace && (workspace.PredictDuel || workspace.predict_duel || workspace.PredictDuelProgram)) {
+      program = workspace.PredictDuel || workspace.predict_duel || workspace.PredictDuelProgram;
       programId = program.programId;
     } else {
       throw new Error("Workspace not available");
@@ -34,8 +35,22 @@ describe("predict-duel", () => {
     // Fallback: manually load IDL and create Program
     const idlRaw = require("../target/idl/predict_duel.json");
     
-    // Get program ID from IDL metadata
-    const programIdString = idlRaw.metadata?.address || "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
+    // Try to get program ID from keypair file first, then IDL metadata, then default
+    let programIdString: string;
+    try {
+      const keypairPath = path.join(__dirname, "../target/deploy/predict_duel-keypair.json");
+      if (fs.existsSync(keypairPath)) {
+        const keypair = JSON.parse(fs.readFileSync(keypairPath, "utf-8"));
+        const keypairBytes = new Uint8Array(keypair);
+        const keypairKeypair = anchor.web3.Keypair.fromSecretKey(keypairBytes);
+        programIdString = keypairKeypair.publicKey.toString();
+      } else {
+        throw new Error("Keypair file not found");
+      }
+    } catch (keypairErr) {
+      // Fallback to IDL metadata or default
+      programIdString = idlRaw.metadata?.address || "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
+    }
     
     if (!programIdString || typeof programIdString !== 'string') {
       throw new Error(`Invalid program ID: ${programIdString}`);
@@ -44,18 +59,23 @@ describe("predict-duel", () => {
     // Create PublicKey first to ensure it's valid
     programId = new PublicKey(programIdString);
     
-    // Ensure IDL metadata has the correct address (use type assertion to avoid TypeScript errors)
-    const idl: Idl = JSON.parse(JSON.stringify(idlRaw)); // Deep clone to avoid mutations
-    if (!idl.metadata) {
-      idl.metadata = { address: programIdString } as any;
-    } else {
-      (idl.metadata as any).address = programIdString;
-    }
+    // Parse IDL and ensure metadata structure is correct for Anchor 0.32.1
+    const idl: any = JSON.parse(JSON.stringify(idlRaw));
     
-    // Create Program instance - Program constructor extracts programId from IDL metadata
-    // Signature: new Program(idl, provider) when programId is in metadata
+    // Ensure metadata exists with address (Anchor 0.32.1 expects this)
+    if (!idl.metadata) {
+      idl.metadata = {};
+    }
+    // Set address as string (not PublicKey object)
+    idl.metadata.address = programIdString;
+    
+    // Create Program instance - Anchor 0.32.1 supports both signatures
+    // Use the two-parameter version which extracts programId from metadata
     program = new Program(idl, provider);
-    programId = program.programId;
+    // Verify programId matches
+    if (program.programId.toString() !== programIdString) {
+      programId = program.programId;
+    }
   }
 
   // Test accounts

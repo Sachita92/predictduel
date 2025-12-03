@@ -7,7 +7,9 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
 import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
-import { PredictDuel } from "../target/types/predict_duel";
+// Type import - may not exist until after anchor build
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PredictDuel = any;
 
 export enum MarketCategory {
   Crypto = "crypto",
@@ -61,7 +63,7 @@ export interface MarketData {
 }
 
 export class PredictDuelClient {
-  private program: Program<PredictDuel>;
+  private program: Program<Idl>;
   private provider: AnchorProvider;
 
   constructor(
@@ -74,11 +76,24 @@ export class PredictDuelClient {
       wallet,
       AnchorProvider.defaultOptions()
     );
-    this.program = new Program(
-      require("../target/idl/predict_duel.json") as Idl,
-      programId,
-      this.provider
-    ) as unknown as Program<PredictDuel>;
+    const idlRaw = require("../target/idl/predict_duel.json");
+    const idl: any = JSON.parse(JSON.stringify(idlRaw));
+    
+    // Ensure metadata exists with address
+    if (!idl.metadata) {
+      idl.metadata = { address: programId.toString() };
+    } else if (!idl.metadata.address) {
+      idl.metadata.address = programId.toString();
+    }
+    
+    // Create Program instance - try three-parameter version first, fallback to two-parameter
+    try {
+      // @ts-ignore - TypeScript doesn't recognize this overload but it works at runtime
+      this.program = new Program(idl, programId, this.provider) as Program<Idl>;
+    } catch (err) {
+      // Fallback: use two-parameter version (Anchor extracts programId from metadata)
+      this.program = new Program(idl, this.provider) as Program<Idl>;
+    }
   }
 
   /**
@@ -266,6 +281,7 @@ export class PredictDuelClient {
    * Fetch market data
    */
   async getMarket(marketPda: PublicKey): Promise<MarketData> {
+    // @ts-ignore - Account types are dynamically generated from IDL
     const market = await this.program.account.market.fetch(marketPda);
     
     return {
@@ -298,6 +314,7 @@ export class PredictDuelClient {
       this.program.programId
     );
 
+    // @ts-ignore - Account types are dynamically generated from IDL
     return await this.program.account.participant.fetch(participantPda);
   }
 
@@ -305,6 +322,7 @@ export class PredictDuelClient {
    * Get all markets created by a user
    */
   async getMarketsByCreator(creatorPubkey: PublicKey): Promise<MarketData[]> {
+    // @ts-ignore - Account types are dynamically generated from IDL
     const markets = await this.program.account.market.all([
       {
         memcmp: {
