@@ -24,16 +24,44 @@ describe("predict-duel", () => {
     // Try workspace pattern - this is the recommended way in Anchor tests
     // Workspace is populated by Anchor from Anchor.toml
     const workspace = anchor.workspace as any;
+    
+    // Debug: log available workspace keys
+    if (workspace) {
+      const workspaceKeys = Object.keys(workspace);
+      console.log("Available workspace keys:", workspaceKeys);
+    }
+    
     // Try different possible program name variations
-    if (workspace && (workspace.PredictDuel || workspace.predict_duel || workspace.PredictDuelProgram)) {
-      program = workspace.PredictDuel || workspace.predict_duel || workspace.PredictDuelProgram;
-      programId = program.programId;
+    // Anchor typically uses the program name from Anchor.toml in PascalCase
+    if (workspace) {
+      // Try common variations
+      const programName = workspace.PredictDuel || 
+                         workspace.predict_duel || 
+                         workspace.PredictDuelProgram ||
+                         workspace.Predict_duel;
+      
+      if (programName) {
+        program = programName;
+        programId = program.programId;
+        console.log("Using workspace program:", programId.toString());
+      } else {
+        throw new Error(`Workspace available but program not found. Available keys: ${Object.keys(workspace).join(", ")}`);
+      }
     } else {
       throw new Error("Workspace not available");
     }
   } catch (e) {
+    console.log("Workspace not available, falling back to manual IDL loading:", e);
     // Fallback: manually load IDL and create Program
-    const idlRaw = require("../target/idl/predict_duel.json");
+    const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
+    
+    if (!fs.existsSync(idlPath)) {
+      throw new Error(
+        `IDL file not found at ${idlPath}. Please run 'anchor build' first to generate the IDL.`
+      );
+    }
+    
+    const idlRaw = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
     
     // Try to get program ID from keypair file first, then IDL metadata, then default
     let programIdString: string;
