@@ -32,9 +32,9 @@ pub mod predict_duel {
             PredictDuelError::InvalidDeadline
         );
 
-        // Store bump - Anchor 0.32.1 still uses ctx.bumps
-        market.bump = ctx.bumps.get("market").copied().unwrap();
-        market.vault_bump = ctx.bumps.get("market_vault").copied().unwrap();
+        // Store bump - Anchor 0.32.1 uses struct fields, not a map
+        market.bump = ctx.bumps.market;
+        market.vault_bump = ctx.bumps.market_vault;
 
         market.creator = ctx.accounts.creator.key();
         market.market_index = market_index;
@@ -101,8 +101,8 @@ pub mod predict_duel {
             participant.prediction = prediction;
             participant.stake = stake_amount;
             participant.claimed = false;
-            // Store bump - Anchor 0.32.1 still uses ctx.bumps
-            participant.bump = ctx.bumps.get("participant").copied().unwrap();
+            // Store bump - Anchor 0.32.1 uses struct fields, not a map
+            participant.bump = ctx.bumps.participant;
             
             market.total_participants += 1;
         } else {
