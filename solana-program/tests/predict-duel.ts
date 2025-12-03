@@ -20,44 +20,43 @@ describe("predict-duel", () => {
   let program: any;
   let programId: PublicKey;
   
-  try {
-    // Try workspace pattern - this is the recommended way in Anchor tests
-    // Workspace is populated by Anchor from Anchor.toml
-    const workspace = anchor.workspace as any;
-    
-    // Debug: log available workspace keys
-    if (workspace) {
-      const workspaceKeys = Object.keys(workspace);
-      console.log("Available workspace keys:", workspaceKeys);
-    }
+  // Try workspace pattern first - this is the recommended way in Anchor tests
+  // Workspace is populated by Anchor automatically when running 'anchor test'
+  const workspace = anchor.workspace as any;
+  
+  if (workspace) {
+    const workspaceKeys = Object.keys(workspace);
+    console.log("Available workspace keys:", workspaceKeys);
     
     // Try different possible program name variations
     // Anchor typically uses the program name from Anchor.toml in PascalCase
-    if (workspace) {
-      // Try common variations
-      const programName = workspace.PredictDuel || 
-                         workspace.predict_duel || 
-                         workspace.PredictDuelProgram ||
-                         workspace.Predict_duel;
-      
-      if (programName) {
-        program = programName;
-        programId = program.programId;
-        console.log("Using workspace program:", programId.toString());
-      } else {
-        throw new Error(`Workspace available but program not found. Available keys: ${Object.keys(workspace).join(", ")}`);
-      }
+    const programName = workspace.PredictDuel || 
+                       workspace.predict_duel || 
+                       workspace.PredictDuelProgram ||
+                       workspace.Predict_duel ||
+                       workspace[workspaceKeys[0]]; // Try first key if standard names don't work
+    
+    if (programName) {
+      program = programName;
+      programId = program.programId;
+      console.log("✅ Using workspace program:", programId.toString());
     } else {
-      throw new Error("Workspace not available");
+      throw new Error(`Workspace available but program not found. Available keys: ${workspaceKeys.join(", ")}`);
     }
-  } catch (e) {
-    console.log("Workspace not available, falling back to manual IDL loading:", e);
+  } else {
+    // Fallback: manually load IDL and create Program
+    console.log("⚠️  Workspace not available, falling back to manual IDL loading");
     // Fallback: manually load IDL and create Program
     const idlPath = path.join(__dirname, "../target/idl/predict_duel.json");
     
     if (!fs.existsSync(idlPath)) {
       throw new Error(
-        `IDL file not found at ${idlPath}. Please run 'anchor build' first to generate the IDL.`
+        `IDL file not found at ${idlPath}.\n` +
+        `Please ensure:\n` +
+        `1. Anchor CLI version matches Rust dependencies (0.32.1)\n` +
+        `2. Run 'anchor build' successfully\n` +
+        `3. Check 'anchor --version' matches Cargo.toml version\n` +
+        `4. Try 'avm install 0.32.1 && avm use 0.32.1' if versions don't match`
       );
     }
     
