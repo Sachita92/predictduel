@@ -7,8 +7,10 @@ import { APP_BLOCKCHAIN } from './blockchain-config'
  * - https://www.quicknode.com
  * - https://www.alchemy.com
  * - https://rpcpool.com
+ * 
+ * Defaults to devnet for development to avoid rate limits on public mainnet endpoint
  */
-const SOLANA_RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
+const SOLANA_RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com'
 
 /**
  * Ethereum RPC endpoint
@@ -25,7 +27,18 @@ export async function getSolanaBalance(address: string): Promise<number> {
     const balance = await connection.getBalance(publicKey)
     return balance / LAMPORTS_PER_SOL
   } catch (error) {
-    console.error('Error fetching Solana balance:', error)
+    // Log more detailed error information
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('Error fetching Solana balance:', errorMessage)
+    
+    // If it's a 403 error, suggest using a different RPC endpoint
+    if (errorMessage.includes('403') || errorMessage.includes('Access forbidden')) {
+      console.warn(
+        'RPC endpoint returned 403. Consider using a dedicated RPC provider. ' +
+        'Set NEXT_PUBLIC_SOLANA_RPC_URL environment variable with your RPC endpoint.'
+      )
+    }
+    
     return 0
   }
 }

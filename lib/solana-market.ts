@@ -103,6 +103,53 @@ export function mapType(type: 'public' | 'friend'): MarketType {
 }
 
 /**
+ * Find the next available market index for a creator
+ * This checks existing markets to find the first unused index
+ */
+async function findNextMarketIndex(
+  programId: PublicKey,
+  creatorPubkey: PublicKey,
+  connection: Connection,
+  startIndex: number = 1,
+  maxAttempts: number = 100
+): Promise<number> {
+  for (let i = startIndex; i < startIndex + maxAttempts; i++) {
+    try {
+      // Try to derive the market PDA for this index
+      const marketPda = PredictDuelClient.deriveMarketPda(
+        programId,
+        creatorPubkey,
+        i
+      )
+      
+      // Check if the account exists by trying to get its info
+      try {
+        const accountInfo = await connection.getAccountInfo(marketPda)
+        // If account exists and has data, this index is taken
+        if (accountInfo && accountInfo.data && accountInfo.data.length > 0) {
+          continue // Try next index
+        }
+        // Account doesn't exist or is empty, this index is available
+        return i
+      } catch (fetchError: any) {
+        // If we can't fetch the account, assume it doesn't exist
+        // This index is available
+        return i
+      }
+    } catch (error) {
+      // Error deriving PDA, try next index
+      continue
+    }
+  }
+  
+  // If we couldn't find an available index, throw an error
+  throw new Error(
+    `Could not find an available market index after ${maxAttempts} attempts. ` +
+    `Please try again or contact support.`
+  )
+}
+
+/**
  * Create a prediction market on-chain
  * 
  * @param provider - Solana wallet provider (from window.solana or Privy)
@@ -154,23 +201,88 @@ export async function createMarketOnChain(
       ? formData.deadline 
       : new Date(formData.deadline)
     
-    // Create market on-chain
-    // Note: SDK expects deadline as Date object, it converts internally
-    const { signature, marketPda } = await client.createMarket({
-      marketIndex: formData.marketIndex || 1, // Market index for tracking
-      question: formData.question.trim(),
-      category: mapCategory(formData.category),
-      stakeAmount: stakeInLamports,
-      deadline: deadlineDate, // SDK expects Date, converts to timestamp internally
-      marketType: mapType(formData.type),
-    })
+    // Get connection and program ID for finding next market index
+    const connection = new Connection(RPC_ENDPOINT, 'confirmed')
+    const creatorPubkey = new PublicKey(provider.publicKey.toString())
     
-    return {
-      marketPda: marketPda.toString(),
-      signature,
+    // Find the next available market index if not provided
+    let marketIndex = formData.marketIndex
+    if (!marketIndex) {
+      try {
+        marketIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, connection)
+        console.log(`Auto-selected market index: ${marketIndex}`)
+      } catch (indexError) {
+        // If we can't find an index automatically, default to 1 and let the error bubble up
+        // The error message will be more helpful
+        console.warn('Could not auto-find market index, using 1:', indexError)
+        marketIndex = 1
+      }
     }
+    
+    // Create market on-chain with retry logic for account conflicts
+    let lastError: any = null
+    const maxRetries = 3
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const { signature, marketPda } = await client.createMarket({
+          marketIndex: marketIndex!,
+          question: formData.question.trim(),
+          category: mapCategory(formData.category),
+          stakeAmount: stakeInLamports,
+          deadline: deadlineDate,
+          marketType: mapType(formData.type),
+        })
+        
+        return {
+          marketPda: marketPda.toString(),
+          signature,
+        }
+      } catch (error: any) {
+        lastError = error
+        
+        // Check if it's an "account already in use" error
+        const errorMessage = error?.message || String(error)
+        const errorLogs = error?.transactionLogs || []
+        const logsString = Array.isArray(errorLogs) ? errorLogs.join(' ') : String(errorLogs)
+        
+        const isAccountInUse = 
+          errorMessage.includes('already in use') ||
+          errorMessage.includes('AccountAlreadyInUse') ||
+          errorMessage.includes('custom program error: 0x0') ||
+          logsString.includes('already in use')
+        
+        if (isAccountInUse && attempt < maxRetries - 1) {
+          // Try to find the next available index
+          try {
+            marketIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, connection, marketIndex! + 1)
+            console.log(`Market index ${marketIndex! - 1} already in use, trying ${marketIndex}`)
+            continue // Retry with new index
+          } catch (indexError) {
+            // Can't find next index, break and throw original error
+            break
+          }
+        } else {
+          // Not a retryable error or out of retries
+          break
+        }
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError || new Error('Failed to create market after retries')
   } catch (error) {
     console.error('Error creating market on-chain:', error)
+    
+    // Provide more helpful error messages
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('already in use') || errorMessage.includes('custom program error: 0x0')) {
+      throw new Error(
+        'Market account already exists. This usually means you\'ve already created a market with this index. ' +
+        'Please try again - the system will automatically find the next available index.'
+      )
+    }
+    
     throw error
   }
 }
