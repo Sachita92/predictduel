@@ -76,7 +76,7 @@ describe("predict-duel", () => {
       }
     } catch (keypairErr) {
       // Fallback to IDL metadata or default
-      programIdString = idlRaw.metadata?.address || "hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr";
+        programIdString = idlRaw.metadata?.address || "4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY";
     }
     
     if (!programIdString || typeof programIdString !== 'string') {

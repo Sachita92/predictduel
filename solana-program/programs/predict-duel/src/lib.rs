@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr");
+declare_id!("4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY");
 
 #[program]
 pub mod predict_duel {

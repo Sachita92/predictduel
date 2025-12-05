@@ -9,7 +9,7 @@ import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 
 // Program ID - Deployed to devnet
-const PROGRAM_ID = new PublicKey('hLhVAG2CKKaFkueawfYQEMBetyQoyYtnPGdJQaj54xr');
+const PROGRAM_ID = new PublicKey('4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY');
 
 // Solana RPC endpoints
 const ENDPOINTS = {
