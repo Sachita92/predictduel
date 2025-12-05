@@ -33,6 +33,7 @@ export enum MarketStatus {
 }
 
 export interface CreateMarketParams {
+  marketIndex?: number; // Optional: market index for tracking
   question: string;
   category: MarketCategory;
   stakeAmount: number; // In lamports
@@ -102,7 +103,7 @@ export class PredictDuelClient {
   async createMarket(
     params: CreateMarketParams
   ): Promise<{ signature: string; marketPda: PublicKey }> {
-    const { question, category, stakeAmount, deadline, marketType } = params;
+    const { marketIndex = 1, question, category, stakeAmount, deadline, marketType } = params;
 
     // Derive market PDA
     const [marketPda] = PublicKey.findProgramAddressSync(
@@ -125,6 +126,7 @@ export class PredictDuelClient {
 
     const tx = await this.program.methods
       .createMarket(
+        new anchor.BN(marketIndex),
         question,
         categoryEnum,
         new anchor.BN(stakeAmount),

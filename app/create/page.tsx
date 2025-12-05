@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
-import { usePrivy } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Button from '@/components/ui/Button'
@@ -12,6 +12,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import { getWalletAddress } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN } from '@/lib/blockchain-config'
+import { createMarketOnChain } from '@/lib/solana-market'
 
 const categories = [
   { id: 'crypto', icon: '💰', label: 'Crypto Prices' },
@@ -29,6 +30,7 @@ const quickDeadlines = [
 export default function CreatePage() {
   const router = useRouter()
   const { authenticated, user, ready } = usePrivy()
+  const { wallets } = useWallets()
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
@@ -99,48 +101,110 @@ export default function CreatePage() {
    */
   const handleLaunch = async () => {
     // Step 1: Make sure we have all the required information
-    // Like checking you filled out all the fields on a form
     if (!category || !question || !stake) {
       setError('Please fill in all fields')
       return
     }
     
-    // Step 2: Show a loading spinner (like "Please wait...")
+    // Step 2: Show a loading spinner
     setIsLoading(true)
     setError(null)
     
     try {
       // Step 3: Calculate when the deadline is
-      // If they picked "24hr", we add 24 hours to now
       const deadlineDate = new Date(Date.now() + deadline)
       
-      // Step 4: Send all the information to our server
-      // This is like sending a package - we put everything in a box and mail it
+      // Step 4: Get Solana wallet provider for on-chain transaction
+      let solanaProvider: any = null
+      
+      // Try window.solana first (Phantom, Solflare, etc.)
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            // Try to connect
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      // If window.solana not available, try Privy wallets
+      if (!solanaProvider && wallets.length > 0) {
+        // Privy wallets might provide access differently
+        // For now, we'll use window.solana as the primary method
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        // Note: Privy's wallet structure may need different access
+        // This is a placeholder - you may need to adjust based on Privy's actual API
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Step 5: Create market on-chain (user will sign transaction)
+      let marketPda: string | null = null
+      let transactionSignature: string | null = null
+      
+      try {
+        const onChainResult = await createMarketOnChain(solanaProvider, {
+          question,
+          category,
+          stake,
+          deadline: deadlineDate,
+          type: duelType,
+        })
+        marketPda = onChainResult.marketPda
+        transactionSignature = onChainResult.signature
+      } catch (onChainError) {
+        console.error('On-chain creation error:', onChainError)
+        throw new Error(
+          onChainError instanceof Error 
+            ? `Failed to create market on-chain: ${onChainError.message}`
+            : 'Failed to create market on-chain. Please try again.'
+        )
+      }
+      
+      // Step 6: Send all the information to our server (including on-chain data)
       const response = await fetch('/api/predictions/create', {
-        method: 'POST', // We're sending data (like mailing a letter)
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json', // We're sending JSON format
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          creatorId: user?.id || 'temp-user-id', // Privy user ID
-          walletAddress: walletAddress, // Wallet address in the correct blockchain format
-          question: question, // The prediction question
-          category: category, // What category
-          stake: stake, // How much SOL
-          deadline: deadlineDate.toISOString(), // When it ends
-          type: duelType, // Public or challenge
+          creatorId: user?.id || 'temp-user-id',
+          walletAddress: walletAddress,
+          question: question,
+          category: category,
+          stake: stake,
+          deadline: deadlineDate.toISOString(),
+          type: duelType,
+          marketPda: marketPda, // On-chain market address
+          transactionSignature: transactionSignature, // Transaction signature
         }),
       })
       
-      // Step 5: Check if it worked
+      // Step 7: Check if it worked
       const data = await response.json()
       
       if (!response.ok) {
-        // If something went wrong, show an error
         throw new Error(data.error || 'Failed to create duel')
       }
       
-      // Step 6: Success! Show success message
+      // Step 8: Success! Show success message
       setIsLoading(false)
       setShowSuccess(true)
       

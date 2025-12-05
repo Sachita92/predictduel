@@ -25,7 +25,9 @@ export async function POST(req: NextRequest) {
       stake,          // How much SOL they're betting
       deadline,       // When does this prediction end
       type,           // Is it public or a challenge to a friend?
-      walletAddress   // Wallet address from Privy
+      walletAddress,  // Wallet address from Privy
+      marketPda,      // On-chain market address (from Solana)
+      transactionSignature // Transaction signature (from Solana)
     } = body
 
     // Step 3: Validate required fields
@@ -88,6 +90,9 @@ export async function POST(req: NextRequest) {
       yesCount: 0, // No one has voted yet
       noCount: 0,
       participants: [], // No participants yet
+      // Store on-chain data if provided
+      ...(marketPda && { marketPda }),
+      ...(transactionSignature && { transactionSignature }),
     })
 
     // Step 8: Send back a success message with the duel

@@ -20,6 +20,8 @@ export interface IDuel extends Document {
   poolSize: number // Total amount in pool (in native currency)
   yesCount: number
   noCount: number
+  marketPda?: string // On-chain market address (Solana PDA)
+  transactionSignature?: string // Transaction signature for on-chain creation
   resolutionData?: {
     // For crypto predictions
     targetPrice?: number
@@ -122,6 +124,13 @@ const DuelSchema: Schema = new Schema(
     noCount: {
       type: Number,
       default: 0,
+    },
+    marketPda: {
+      type: String,
+      index: true, // Index for quick lookups
+    },
+    transactionSignature: {
+      type: String,
     },
     resolutionData: {
       targetPrice: Number,
