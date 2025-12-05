@@ -13,11 +13,28 @@ export async function POST(req: NextRequest) {
   try {
     // Step 1: Connect to the database
     // Think of this like opening a filing cabinet
-    await connectDB()
+    try {
+      await connectDB()
+    } catch (dbError) {
+      console.error('Database connection error:', dbError)
+      return NextResponse.json(
+        { error: 'Database connection failed. Please try again.' },
+        { status: 500 }
+      )
+    }
 
     // Step 2: Get the data from the form
     // This is like reading a letter someone sent you
-    const body = await req.json()
+    let body
+    try {
+      body = await req.json()
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError)
+      return NextResponse.json(
+        { error: 'Invalid request data. Please try again.' },
+        { status: 400 }
+      )
+    }
     const { 
       creatorId,      // Who is creating this duel
       question,       // What they're predicting (e.g., "Will BTC hit $100K?")
@@ -114,9 +131,23 @@ export async function POST(req: NextRequest) {
     // If something goes wrong, send an error message
     // Like if the filing cabinet is locked or the paper is torn
     console.error('Error creating duel:', error)
+    
+    // Ensure we always return JSON, never HTML
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Failed to create duel. Please try again.'
+    
+    // Log full error details for debugging
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack)
+    }
+    
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Failed to create duel. Please try again.' 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' 
+          ? (error instanceof Error ? error.stack : String(error))
+          : undefined
       },
       { status: 500 } // 500 means "server error"
     )
