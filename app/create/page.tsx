@@ -160,10 +160,19 @@ export default function CreatePage() {
       let transactionSignature: string | null = null
       
       try {
+        // Ensure stake is a valid number
+        const stakeAmount = typeof stake === 'number' && !isNaN(stake) && stake > 0 
+          ? stake 
+          : parseFloat(stake as any) || 0.01
+        
+        if (stakeAmount <= 0) {
+          throw new Error('Stake amount must be greater than 0')
+        }
+        
         const onChainResult = await createMarketOnChain(solanaProvider, {
-          question,
-          category,
-          stake,
+          question: question.trim(),
+          category: category || 'other',
+          stake: stakeAmount,
           deadline: deadlineDate,
           type: duelType,
         })

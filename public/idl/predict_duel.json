@@ -1,0 +1,508 @@
+{
+  "version": "0.1.0",
+  "name": "predict_duel",
+  "instructions": [
+    {
+      "name": "createMarket",
+      "docs": ["Create a new prediction market"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "creator",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "marketVault",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "marketIndex",
+          "type": "u64"
+        },
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "category",
+          "type": {
+            "defined": "MarketCategory"
+          }
+        },
+        {
+          "name": "stakeAmount",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "i64"
+        },
+        {
+          "name": "marketType",
+          "type": {
+            "defined": "MarketType"
+          }
+        }
+      ]
+    },
+    {
+      "name": "placeBet",
+      "docs": ["Place a bet on a prediction market"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "participant",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bettor",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "marketVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "prediction",
+          "type": "bool"
+        },
+        {
+          "name": "stakeAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resolveMarket",
+      "docs": ["Resolve the market with the final outcome"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "resolver",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "claimWinnings",
+      "docs": ["Claim winnings after market is resolved"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "participant",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "winner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "marketVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancelMarket",
+      "docs": ["Cancel market (only if no participants or before deadline by creator)"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "creator",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "refundStake",
+      "docs": ["Refund participants if market is cancelled"],
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "participant",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bettor",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "marketVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Market",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "publicKey"
+          },
+          {
+            "name": "marketIndex",
+            "type": "u64"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "type": {
+              "defined": "MarketCategory"
+            }
+          },
+          {
+            "name": "stakeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "marketType",
+            "type": {
+              "defined": "MarketType"
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": "MarketStatus"
+            }
+          },
+          {
+            "name": "poolSize",
+            "type": "u64"
+          },
+          {
+            "name": "yesCount",
+            "type": "u32"
+          },
+          {
+            "name": "noCount",
+            "type": "u32"
+          },
+          {
+            "name": "yesPool",
+            "type": "u64"
+          },
+          {
+            "name": "noPool",
+            "type": "u64"
+          },
+          {
+            "name": "totalParticipants",
+            "type": "u32"
+          },
+          {
+            "name": "outcome",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vaultBump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Participant",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "publicKey"
+          },
+          {
+            "name": "bettor",
+            "type": "publicKey"
+          },
+          {
+            "name": "prediction",
+            "type": "bool"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "MarketCategory",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Crypto"
+          },
+          {
+            "name": "Weather"
+          },
+          {
+            "name": "Sports"
+          },
+          {
+            "name": "Meme"
+          },
+          {
+            "name": "Local"
+          },
+          {
+            "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Public"
+          },
+          {
+            "name": "Challenge"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Resolved"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PredictDuelError",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "QuestionTooLong"
+          },
+          {
+            "name": "StakeTooLow"
+          },
+          {
+            "name": "InvalidDeadline"
+          },
+          {
+            "name": "MarketNotActive"
+          },
+          {
+            "name": "MarketExpired"
+          },
+          {
+            "name": "UnauthorizedResolver"
+          },
+          {
+            "name": "MarketNotExpired"
+          },
+          {
+            "name": "MarketNotResolved"
+          },
+          {
+            "name": "AlreadyClaimed"
+          },
+          {
+            "name": "NoOutcome"
+          },
+          {
+            "name": "NotAWinner"
+          },
+          {
+            "name": "CannotCancel"
+          },
+          {
+            "name": "MarketNotCancelled"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "QuestionTooLong",
+      "msg": "Question exceeds 200 characters"
+    },
+    {
+      "code": 6001,
+      "name": "StakeTooLow",
+      "msg": "Stake amount must be at least 0.01 SOL"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidDeadline",
+      "msg": "Deadline must be in the future"
+    },
+    {
+      "code": 6003,
+      "name": "MarketNotActive",
+      "msg": "Market is not active"
+    },
+    {
+      "code": 6004,
+      "name": "MarketExpired",
+      "msg": "Market has expired"
+    },
+    {
+      "code": 6005,
+      "name": "UnauthorizedResolver",
+      "msg": "Only the creator can resolve this market"
+    },
+    {
+      "code": 6006,
+      "name": "MarketNotExpired",
+      "msg": "Market has not expired yet"
+    },
+    {
+      "code": 6007,
+      "name": "MarketNotResolved",
+      "msg": "Market is not resolved yet"
+    },
+    {
+      "code": 6008,
+      "name": "AlreadyClaimed",
+      "msg": "Winnings already claimed"
+    },
+    {
+      "code": 6009,
+      "name": "NoOutcome",
+      "msg": "No outcome set for market"
+    },
+    {
+      "code": 6010,
+      "name": "NotAWinner",
+      "msg": "You did not win this market"
+    },
+    {
+      "code": 6011,
+      "name": "CannotCancel",
+      "msg": "Cannot cancel market with active participants"
+    },
+    {
+      "code": 6012,
+      "name": "MarketNotCancelled",
+      "msg": "Market is not cancelled"
+    }
+  ],
+  "metadata": {
+    "address": "4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY"
+  }
+}
+

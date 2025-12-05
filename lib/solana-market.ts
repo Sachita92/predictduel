@@ -47,13 +47,37 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
 }
 
 /**
+ * Load IDL for browser environment
+ * Fetches from public directory (copied during build)
+ */
+async function loadIDL(): Promise<any> {
+  try {
+    // Fetch IDL from public directory
+    const response = await fetch('/idl/predict_duel.json')
+    if (!response.ok) {
+      throw new Error(`Failed to fetch IDL: ${response.status} ${response.statusText}`)
+    }
+    return await response.json()
+  } catch (fetchError) {
+    console.error('Failed to load IDL:', fetchError)
+    throw new Error(
+      'IDL not found. Please ensure solana-program/target/idl/predict_duel.json exists and ' +
+      'is copied to public/idl/predict_duel.json. Error: ' + (fetchError as Error).message
+    )
+  }
+}
+
+/**
  * Initialize PredictDuel client from Solana wallet provider
  */
-export function initializeClient(provider: any): PredictDuelClient {
+export async function initializeClient(provider: any): Promise<PredictDuelClient> {
   const connection = new Connection(RPC_ENDPOINT, 'confirmed')
   const wallet = createAnchorWallet(provider)
   
-  return new PredictDuelClient(connection, wallet, PROGRAM_ID)
+  // Load IDL for browser compatibility
+  const idl = await loadIDL()
+  
+  return new PredictDuelClient(connection, wallet, PROGRAM_ID, idl)
 }
 
 /**
@@ -97,20 +121,47 @@ export async function createMarketOnChain(
   }
 ): Promise<{ marketPda: string; signature: string }> {
   try {
-    // Initialize client
-    const client = initializeClient(provider)
+    // Validate inputs
+    if (!formData.question || formData.question.trim().length === 0) {
+      throw new Error('Question is required')
+    }
+    if (!formData.stake || formData.stake <= 0) {
+      throw new Error('Stake amount must be greater than 0')
+    }
+    if (!formData.deadline || !(formData.deadline instanceof Date)) {
+      throw new Error('Deadline must be a valid Date object')
+    }
+    if (!formData.category) {
+      throw new Error('Category is required')
+    }
+    if (!formData.type) {
+      throw new Error('Market type is required')
+    }
+    
+    // Initialize client (now async to load IDL)
+    const client = await initializeClient(provider)
     
     // Convert SOL to lamports
     const stakeInLamports = PredictDuelClient.solToLamports(formData.stake)
+    
+    // Validate lamports conversion
+    if (!stakeInLamports || isNaN(stakeInLamports) || stakeInLamports <= 0) {
+      throw new Error(`Invalid stake amount: ${formData.stake} SOL`)
+    }
+    
+    // Ensure deadline is a Date object
+    const deadlineDate = formData.deadline instanceof Date 
+      ? formData.deadline 
+      : new Date(formData.deadline)
     
     // Create market on-chain
     // Note: SDK expects deadline as Date object, it converts internally
     const { signature, marketPda } = await client.createMarket({
       marketIndex: formData.marketIndex || 1, // Market index for tracking
-      question: formData.question,
+      question: formData.question.trim(),
       category: mapCategory(formData.category),
       stakeAmount: stakeInLamports,
-      deadline: formData.deadline, // SDK expects Date, converts to timestamp internally
+      deadline: deadlineDate, // SDK expects Date, converts to timestamp internally
       marketType: mapType(formData.type),
     })
     

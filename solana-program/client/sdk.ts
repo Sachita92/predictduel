@@ -70,30 +70,52 @@ export class PredictDuelClient {
   constructor(
     connection: Connection,
     wallet: anchor.Wallet,
-    programId: PublicKey
+    programId: PublicKey,
+    idl?: any // Optional: pass IDL directly for browser compatibility
   ) {
     this.provider = new AnchorProvider(
       connection,
       wallet,
       AnchorProvider.defaultOptions()
     );
-    const idlRaw = require("../target/idl/predict_duel.json");
-    const idl: any = JSON.parse(JSON.stringify(idlRaw));
+    
+    // Load IDL - support both Node.js (require) and browser (fetch/import) environments
+    let idlRaw: any;
+    
+    if (idl) {
+      // IDL passed directly (browser-friendly)
+      idlRaw = idl;
+    } else {
+      // Try to load from file system (Node.js environment)
+      try {
+        // @ts-ignore - require may not be available in browser
+        idlRaw = require("../target/idl/predict_duel.json");
+      } catch (e) {
+        throw new Error(
+          "IDL not found. In browser environments, pass the IDL as the 4th parameter to PredictDuelClient constructor, " +
+          "or ensure the IDL file is accessible. Error: " + (e as Error).message
+        );
+      }
+    }
+    
+    const idlParsed: any = typeof idlRaw === 'string' 
+      ? JSON.parse(idlRaw) 
+      : JSON.parse(JSON.stringify(idlRaw));
     
     // Ensure metadata exists with address
-    if (!idl.metadata) {
-      idl.metadata = { address: programId.toString() };
-    } else if (!idl.metadata.address) {
-      idl.metadata.address = programId.toString();
+    if (!idlParsed.metadata) {
+      idlParsed.metadata = { address: programId.toString() };
+    } else if (!idlParsed.metadata.address) {
+      idlParsed.metadata.address = programId.toString();
     }
     
     // Create Program instance - try three-parameter version first, fallback to two-parameter
     try {
       // @ts-ignore - TypeScript doesn't recognize this overload but it works at runtime
-      this.program = new Program(idl, programId, this.provider) as Program<Idl>;
+      this.program = new Program(idlParsed, programId, this.provider) as Program<Idl>;
     } catch (err) {
       // Fallback: use two-parameter version (Anchor extracts programId from metadata)
-      this.program = new Program(idl, this.provider) as Program<Idl>;
+      this.program = new Program(idlParsed, this.provider) as Program<Idl>;
     }
   }
 
@@ -124,13 +146,29 @@ export class PredictDuelClient {
     const categoryEnum = { [category]: {} };
     const typeEnum = { [marketType]: {} };
 
+    // Validate inputs before creating BN
+    if (marketIndex === undefined || marketIndex === null || isNaN(marketIndex)) {
+      throw new Error('marketIndex must be a valid number')
+    }
+    if (stakeAmount === undefined || stakeAmount === null || isNaN(stakeAmount)) {
+      throw new Error('stakeAmount must be a valid number')
+    }
+    if (!deadline || !(deadline instanceof Date) || isNaN(deadline.getTime())) {
+      throw new Error('deadline must be a valid Date object')
+    }
+    
+    const deadlineTimestamp = Math.floor(deadline.getTime() / 1000)
+    if (isNaN(deadlineTimestamp) || deadlineTimestamp <= 0) {
+      throw new Error('deadline timestamp is invalid')
+    }
+    
     const tx = await this.program.methods
       .createMarket(
-        new anchor.BN(marketIndex),
+        new anchor.BN(Number(marketIndex)),
         question,
         categoryEnum,
-        new anchor.BN(stakeAmount),
-        new anchor.BN(Math.floor(deadline.getTime() / 1000)),
+        new anchor.BN(Number(stakeAmount)),
+        new anchor.BN(deadlineTimestamp),
         typeEnum
       )
       .accounts({
