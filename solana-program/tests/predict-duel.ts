@@ -53,10 +53,10 @@ describe("predict-duel", () => {
       throw new Error(
         `IDL file not found at ${idlPath}.\n` +
         `Please ensure:\n` +
-        `1. Anchor CLI version matches Rust dependencies (0.28.0)\n` +
+        `1. Anchor CLI version matches Rust dependencies (0.32.1)\n` +
         `2. Run 'anchor build' successfully\n` +
         `3. Check 'anchor --version' matches Cargo.toml version\n` +
-        `4. Try 'avm install 0.28.0 && avm use 0.28.0' if versions don't match`
+        `4. Try 'avm install 0.32.1 && avm use 0.32.1' if versions don't match`
       );
     }
     

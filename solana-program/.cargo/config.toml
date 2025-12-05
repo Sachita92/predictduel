@@ -1,0 +1,9 @@
+# Cargo configuration to help with lock file version compatibility
+# Note: This may not prevent version 4 generation, but helps with other settings
+
+[net]
+git-fetch-with-cli = true
+
+
+
+
