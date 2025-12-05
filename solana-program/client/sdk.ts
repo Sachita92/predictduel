@@ -128,18 +128,29 @@ export class PredictDuelClient {
     const { marketIndex = 1, question, category, stakeAmount, deadline, marketType } = params;
 
     // Derive market PDA
+    // IMPORTANT: Seeds must match Rust program exactly:
+    // seeds = [b"market", creator.key().as_ref(), &market_index.to_le_bytes()]
+    const marketIndexBuffer = Buffer.allocUnsafe(8);
+    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    
     const [marketPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
         this.provider.wallet.publicKey.toBuffer(),
-        Buffer.from(question),
+        marketIndexBuffer,
       ],
       this.program.programId
     );
 
     // Derive market vault PDA
+    // IMPORTANT: Seeds must match Rust program exactly:
+    // seeds = [b"market_vault", creator.key().as_ref(), &market_index.to_le_bytes()]
     const [marketVaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), marketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        this.provider.wallet.publicKey.toBuffer(),
+        marketIndexBuffer,
+      ],
       this.program.programId
     );
 
@@ -242,6 +253,13 @@ export class PredictDuelClient {
    * Claim winnings from a resolved market
    */
   async claimWinnings(marketPda: PublicKey): Promise<string> {
+    // First, fetch the market account to get creator and market_index
+    // @ts-ignore - TypeScript doesn't know the account structure from IDL
+    const marketAccount = await this.program.account.market.fetch(marketPda);
+    const creator = marketAccount.creator as PublicKey;
+    // @ts-ignore
+    const marketIndex = marketAccount.marketIndex.toNumber();
+    
     const [participantPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("participant"),
@@ -251,8 +269,16 @@ export class PredictDuelClient {
       this.program.programId
     );
 
+    // Derive market vault using creator and market_index (matches Rust program)
+    const marketIndexBuffer = Buffer.allocUnsafe(8);
+    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    
     const [marketVaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), marketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.toBuffer(),
+        marketIndexBuffer,
+      ],
       this.program.programId
     );
 
@@ -390,18 +416,22 @@ export class PredictDuelClient {
   }
 
   /**
-   * Derive market PDA for a given question and creator
+   * Derive market PDA for a given creator and market_index
+   * IMPORTANT: Seeds must match Rust program: [b"market", creator.key().as_ref(), &market_index.to_le_bytes()]
    */
   static deriveMarketPda(
     programId: PublicKey,
     creatorPubkey: PublicKey,
-    question: string
+    marketIndex: number
   ): PublicKey {
+    const marketIndexBuffer = Buffer.allocUnsafe(8);
+    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    
     const [marketPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
         creatorPubkey.toBuffer(),
-        Buffer.from(question),
+        marketIndexBuffer,
       ],
       programId
     );
