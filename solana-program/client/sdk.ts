@@ -130,8 +130,11 @@ export class PredictDuelClient {
     // Derive market PDA
     // IMPORTANT: Seeds must match Rust program exactly:
     // seeds = [b"market", creator.key().as_ref(), &market_index.to_le_bytes()]
-    const marketIndexBuffer = Buffer.allocUnsafe(8);
-    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    // Use anchor.BN for browser compatibility (same as test file)
+    const marketIndexBN = new anchor.BN(marketIndex);
+    // Convert to array first, then to Buffer for browser compatibility
+    const marketIndexArray = marketIndexBN.toArray("le", 8);
+    const marketIndexBuffer = Buffer.from(marketIndexArray);
     
     const [marketPda] = PublicKey.findProgramAddressSync(
       [
@@ -270,8 +273,11 @@ export class PredictDuelClient {
     );
 
     // Derive market vault using creator and market_index (matches Rust program)
-    const marketIndexBuffer = Buffer.allocUnsafe(8);
-    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    // Use anchor.BN for browser compatibility
+    const marketIndexBN = new anchor.BN(marketIndex);
+    // Convert to array first, then to Buffer for browser compatibility
+    const marketIndexArray = marketIndexBN.toArray("le", 8);
+    const marketIndexBuffer = Buffer.from(marketIndexArray);
     
     const [marketVaultPda] = PublicKey.findProgramAddressSync(
       [
@@ -424,8 +430,11 @@ export class PredictDuelClient {
     creatorPubkey: PublicKey,
     marketIndex: number
   ): PublicKey {
-    const marketIndexBuffer = Buffer.allocUnsafe(8);
-    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    // Use anchor.BN for browser compatibility
+    const marketIndexBN = new anchor.BN(marketIndex);
+    // Convert to array first, then to Buffer for browser compatibility
+    const marketIndexArray = marketIndexBN.toArray("le", 8);
+    const marketIndexBuffer = Buffer.from(marketIndexArray);
     
     const [marketPda] = PublicKey.findProgramAddressSync(
       [
