@@ -25,13 +25,30 @@ async function connectDB(): Promise<Mongoose> {
   }
 
   if (!cached.promise) {
-    const opts = {
+    const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
     }
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance: Mongoose) => {
-      return mongooseInstance
-    })
+    // Handle SSL/TLS for MongoDB Atlas connections
+    // MongoDB Atlas (mongodb+srv://) requires TLS by default
+    if (MONGODB_URI.includes('mongodb+srv://')) {
+      opts.tls = true
+      // For development, allow invalid certificates if needed (e.g., corporate proxy)
+      // WARNING: Only use this in development, never in production
+      if (process.env.NODE_ENV === 'development' && process.env.MONGODB_ALLOW_INVALID_CERT === 'true') {
+        opts.tlsAllowInvalidCertificates = true
+        console.warn('⚠️  WARNING: Allowing invalid TLS certificates for MongoDB. This should only be used in development!')
+      }
+    } else if (MONGODB_URI.includes('ssl=true')) {
+      // Explicit SSL parameter in connection string
+      opts.tls = true
+      if (process.env.NODE_ENV === 'development' && process.env.MONGODB_ALLOW_INVALID_CERT === 'true') {
+        opts.tlsAllowInvalidCertificates = true
+        console.warn('⚠️  WARNING: Allowing invalid TLS certificates for MongoDB. This should only be used in development!')
+      }
+    }
+
+    cached.promise = mongoose.connect(MONGODB_URI, opts)
   }
 
   try {
@@ -39,6 +56,10 @@ async function connectDB(): Promise<Mongoose> {
   } catch (e) {
     cached.promise = null
     throw e
+  }
+
+  if (!cached.conn) {
+    throw new Error('Failed to establish MongoDB connection')
   }
 
   return cached.conn
