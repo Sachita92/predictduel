@@ -204,6 +204,11 @@ export class PredictDuelClient {
   ): Promise<{ signature: string; participantPda: PublicKey }> {
     const { marketPda, prediction, stakeAmount } = params;
 
+    // Fetch market account to get creator and market_index
+    const marketAccount = await this.program.account.market.fetch(marketPda);
+    const creator = marketAccount.creator as PublicKey;
+    const marketIndex = marketAccount.marketIndex as number;
+
     // Derive participant PDA
     const [participantPda] = PublicKey.findProgramAddressSync(
       [
@@ -214,9 +219,16 @@ export class PredictDuelClient {
       this.program.programId
     );
 
-    // Derive market vault PDA
+    // Derive market vault PDA using correct seeds: [market_vault, creator, market_index]
+    const marketIndexBuffer = Buffer.allocUnsafe(8);
+    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    
     const [marketVaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market_vault"), marketPda.toBuffer()],
+      [
+        Buffer.from("market_vault"),
+        creator.toBuffer(),
+        marketIndexBuffer,
+      ],
       this.program.programId
     );
 

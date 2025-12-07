@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Clock, Users, TrendingUp, Loader2, Filter, CheckCircle, XCircle } from 'lucide-react'
+import { Clock, Users, TrendingUp, Loader2, Filter } from 'lucide-react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
@@ -392,34 +392,26 @@ export default function DuelsPage() {
                    new Date(duel.deadline) > new Date() && (
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <Button
-                        variant="primary"
-                        className="h-14 text-lg font-bold"
+                        className="h-14 text-lg font-bold bg-success hover:bg-green-600 text-white border-0"
                         onClick={() => handleBet(duel.id, 'yes')}
                         disabled={bettingDuelId === duel.id}
                       >
                         {bettingDuelId === duel.id ? (
                           <Loader2 className="animate-spin" size={20} />
                         ) : (
-                          <>
-                            <CheckCircle size={20} className="mr-2" />
-                            YES
-                          </>
+                          'YES'
                         )}
                       </Button>
                       
                       <Button
-                        variant="outline"
-                        className="h-14 text-lg font-bold"
+                        className="h-14 text-lg font-bold bg-danger hover:bg-red-600 text-white border-0"
                         onClick={() => handleBet(duel.id, 'no')}
                         disabled={bettingDuelId === duel.id}
                       >
                         {bettingDuelId === duel.id ? (
                           <Loader2 className="animate-spin" size={20} />
                         ) : (
-                          <>
-                            <XCircle size={20} className="mr-2" />
-                            NO
-                          </>
+                          'NO'
                         )}
                       </Button>
                     </div>

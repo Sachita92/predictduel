@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Share2, MessageCircle, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Share2, MessageCircle, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
@@ -399,8 +399,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             
             <div className="grid grid-cols-2 gap-4">
               <Button
-                variant={selectedPrediction === 'yes' ? 'primary' : 'outline'}
-                className="h-20 text-xl font-bold"
+                className="h-20 text-xl font-bold bg-success hover:bg-green-600 text-white border-0"
                 onClick={() => {
                   if (canBet && !isBetting) {
                     setSelectedPrediction('yes')
@@ -412,16 +411,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 {isBetting && selectedPrediction === 'yes' ? (
                   <Loader2 className="animate-spin" size={24} />
                 ) : (
-                  <>
-                    <CheckCircle size={24} className="mr-2" />
-                    YES
-                  </>
+                  'YES'
                 )}
               </Button>
               
               <Button
-                variant={selectedPrediction === 'no' ? 'primary' : 'outline'}
-                className="h-20 text-xl font-bold"
+                className="h-20 text-xl font-bold bg-danger hover:bg-red-600 text-white border-0"
                 onClick={() => {
                   if (canBet && !isBetting) {
                     setSelectedPrediction('no')
@@ -433,10 +428,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 {isBetting && selectedPrediction === 'no' ? (
                   <Loader2 className="animate-spin" size={24} />
                 ) : (
-                  <>
-                    <XCircle size={24} className="mr-2" />
-                    NO
-                  </>
+                  'NO'
                 )}
               </Button>
             </div>
