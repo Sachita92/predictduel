@@ -2,42 +2,235 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Share2, MessageCircle, X, TrendingUp, Loader2 } from 'lucide-react'
+import { Share2, MessageCircle, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
+import { getWalletAddress } from '@/lib/privy-helpers'
+import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
+import { placeBetOnChain } from '@/lib/solana-bet'
+
+interface Duel {
+  id: string
+  question: string
+  category: string
+  stake: number
+  deadline: string
+  status: string
+  outcome: string | null
+  poolSize: number
+  yesCount: number
+  noCount: number
+  creator: {
+    id: string
+    username: string
+    avatar: string
+    walletAddress: string
+    privyId: string
+  }
+  participants: Array<{
+    id: string
+    user: {
+      id: string
+      username: string
+      avatar: string
+      walletAddress: string
+    }
+    prediction: 'yes' | 'no'
+    stake: number
+    won: boolean | null
+    payout: number | null
+  }>
+  marketPda: string | null
+  createdAt: string
+}
 
 export default function DuelDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
-  // All hooks must be called at the top, before any conditional returns
+  const router = useRouter()
+  const { ready, authenticated, user } = usePrivy()
+  const { wallets } = useWallets()
   const [id, setId] = useState<string>('')
+  const [duel, setDuel] = useState<Duel | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [status] = useState<'waiting' | 'active' | 'resolving'>('active')
-  const [yourPosition] = useState<'yes' | 'no'>('yes')
-  const [opponentPosition] = useState<'yes' | 'no'>('no')
-  const [yourStake] = useState(0.1)
-  const [opponentStake] = useState(0.1)
-  const [currentPrice] = useState(99500)
-  const [targetPrice] = useState(100000)
+  const [isBetting, setIsBetting] = useState(false)
+  const [betError, setBetError] = useState<string | null>(null)
+  const [betSuccess, setBetSuccess] = useState(false)
+  const [selectedPrediction, setSelectedPrediction] = useState<'yes' | 'no' | null>(null)
+  const [betAmount, setBetAmount] = useState(0.1)
+  
+  const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
+  const currency = getAppCurrency()
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  
+  // Fetch current user's MongoDB ID
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/profile?privyId=${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.user?.id) {
+            setCurrentUserId(data.user.id)
+          }
+        })
+        .catch(err => console.error('Error fetching user ID:', err))
+    }
+  }, [user?.id])
+  
+  // Get current user's participation
+  const userParticipation = duel?.participants.find(
+    (p) => currentUserId && p.user.id === currentUserId
+  )
+  
+  const isCreator = user?.id && duel?.creator.privyId === user.id
+  const hasParticipated = !!userParticipation
+  const canBet = authenticated && !isCreator && !hasParticipated && 
+                 duel?.status === 'active' && 
+                 new Date(duel.deadline) > new Date()
   
   useEffect(() => {
     // Handle both sync and async params (Next.js 14 vs 15)
     if (typeof params === 'object' && 'then' in params) {
-      // Async params (Next.js 15)
       params.then((resolvedParams) => {
         setId(resolvedParams.id)
-        setIsLoading(false)
       })
     } else {
-      // Sync params (Next.js 14)
       setId(params.id)
-      setIsLoading(false)
     }
   }, [params])
   
-  if (isLoading) {
+  useEffect(() => {
+    if (ready && !authenticated) {
+      router.push('/login')
+    }
+  }, [ready, authenticated, router])
+  
+  useEffect(() => {
+    if (id) {
+      fetchDuel()
+    }
+  }, [id])
+  
+  const fetchDuel = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/duels/${id}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch duel')
+      }
+      
+      setDuel(data.duel)
+    } catch (error) {
+      console.error('Error fetching duel:', error)
+      setBetError(error instanceof Error ? error.message : 'Failed to load duel')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  const handleBet = async (prediction: 'yes' | 'no') => {
+    if (!duel || !user || !walletAddress) {
+      setBetError('Please connect your wallet')
+      return
+    }
+    
+    if (!duel.marketPda) {
+      setBetError('This duel is not connected to Solana. Please contact support.')
+      return
+    }
+    
+    setIsBetting(true)
+    setBetError(null)
+    setBetSuccess(false)
+    
+    try {
+      // Step 1: Get Solana wallet provider
+      let solanaProvider: any = null
+      
+      // Try window.solana first (Phantom, Solflare, etc.)
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      // If window.solana not available, try Privy wallets
+      if (!solanaProvider && wallets.length > 0) {
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Step 2: Place bet on-chain
+      const onChainResult = await placeBetOnChain(solanaProvider, {
+        marketPda: duel.marketPda,
+        prediction: prediction === 'yes',
+        stakeAmount: betAmount,
+      })
+      
+      // Step 3: Update MongoDB
+      const response = await fetch(`/api/duels/${id}/bet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          prediction: prediction,
+          stake: betAmount,
+          transactionSignature: onChainResult.signature,
+          participantPda: onChainResult.participantPda,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to place bet')
+      }
+      
+      setBetSuccess(true)
+      
+      // Refresh duel data
+      setTimeout(() => {
+        fetchDuel()
+        setBetSuccess(false)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Error placing bet:', error)
+      setBetError(error instanceof Error ? error.message : 'Failed to place bet')
+    } finally {
+      setIsBetting(false)
+    }
+  }
+  
+  if (!ready || isLoading) {
     return (
       <div className="min-h-screen bg-background-dark">
         <TopNav />
@@ -47,12 +240,34 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             <p className="text-white/70">Loading duel...</p>
           </div>
         </div>
+        <MobileNav />
       </div>
     )
   }
   
-  const deadline = new Date(Date.now() + 86400000)
-  const question = 'Will BTC hit $100K by Friday?'
+  if (!duel) {
+    return (
+      <div className="min-h-screen bg-background-dark pb-20">
+        <TopNav />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p className="text-white/70 mb-4">Duel not found</p>
+            <Button onClick={() => router.push('/duels')}>Back to Duels</Button>
+          </div>
+        </div>
+        <MobileNav />
+      </div>
+    )
+  }
+  
+  const deadline = new Date(duel.deadline)
+  const isExpired = new Date() >= deadline
+  const yesStake = duel.participants
+    .filter(p => p.prediction === 'yes')
+    .reduce((sum, p) => sum + p.stake, 0)
+  const noStake = duel.participants
+    .filter(p => p.prediction === 'no')
+    .reduce((sum, p) => sum + p.stake, 0)
   
   return (
     <div className="min-h-screen bg-background-dark pb-20">
@@ -62,149 +277,202 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <Badge variant="info">Crypto</Badge>
+            <Badge variant="info">{duel.category}</Badge>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm">
                 <Share2 size={16} className="mr-2" />
                 Share
               </Button>
-              <Button variant="ghost" size="sm">
-                <MessageCircle size={16} className="mr-2" />
-                Chat
-              </Button>
             </div>
           </div>
           
-          <h1 className="text-3xl md:text-4xl font-bold mb-4 font-display">{question}</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-4 font-display">{duel.question}</h1>
           
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center mb-4">
             <CountdownTimer targetDate={deadline} />
+          </div>
+          
+          <div className="text-center">
+            <Badge 
+              variant={
+                duel.status === 'active' ? 'success' :
+                duel.status === 'resolved' ? 'info' :
+                duel.status === 'pending' ? 'warning' :
+                'danger'
+              }
+              className="text-lg px-4 py-2"
+            >
+              {duel.status === 'active' ? 'Active' :
+               duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
+               duel.status === 'pending' ? 'Pending' :
+               'Cancelled'}
+            </Badge>
           </div>
         </div>
         
-        {/* VS Battle View */}
-        <Card variant="glass" className="p-8 mb-6">
-          <div className="text-center mb-6">
-            <div className={`
-              inline-block px-4 py-2 rounded-full font-bold text-lg mb-4
-              ${status === 'active' ? 'bg-success/20 text-success' : 
-                status === 'waiting' ? 'bg-accent/20 text-accent' : 
-                'bg-white/10 text-white'}
-            `}>
-              {status === 'active' ? 'Battle Active!' : 
-               status === 'waiting' ? 'Waiting for opponent...' : 
-               'Resolving...'}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            {/* You */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="text-center"
-            >
-              <div className={`
-                w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-bold
-                ${yourPosition === 'yes' ? 'gradient-primary' : 'bg-danger'}
-              `}>
-                You
-              </div>
-              <div className="font-bold text-xl mb-2">
-                {yourPosition === 'yes' ? 'YES' : 'NO'}
-              </div>
+        {/* Pool Stats */}
+        <Card variant="glass" className="p-6 mb-6">
+          <h3 className="text-xl font-bold mb-4">Pool Statistics</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
               <div className="text-2xl font-bold gradient-text mb-1">
-                {yourStake.toFixed(2)} SOL
+                {duel.poolSize.toFixed(2)} {currency}
               </div>
-              <div className="text-sm text-white/60">Your Stake</div>
-            </motion.div>
-            
-            {/* VS */}
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-4xl font-bold gradient-text"
-              >
-                VS
-              </motion.div>
+              <div className="text-sm text-white/60">Total Pool</div>
             </div>
-            
-            {/* Opponent */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="text-center"
-            >
-              <div className={`
-                w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-bold
-                ${opponentPosition === 'yes' ? 'gradient-primary' : 'bg-danger'}
-              `}>
-                @bob
+            <div className="text-center">
+              <div className="text-2xl font-bold text-success mb-1">
+                YES: {duel.yesCount}
               </div>
-              <div className="font-bold text-xl mb-2">
-                {opponentPosition === 'yes' ? 'YES' : 'NO'}
+              <div className="text-sm text-white/60">{yesStake.toFixed(2)} {currency}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-danger mb-1">
+                NO: {duel.noCount}
               </div>
-              <div className="text-2xl font-bold gradient-text mb-1">
-                {opponentStake.toFixed(2)} SOL
-              </div>
-              <div className="text-sm text-white/60">Opponent Stake</div>
-            </motion.div>
+              <div className="text-sm text-white/60">{noStake.toFixed(2)} {currency}</div>
+            </div>
           </div>
         </Card>
         
-        {/* Live Stats */}
-        <Card variant="glass" className="p-6 mb-6">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <TrendingUp className="text-primary-from" size={20} />
-            Live Status
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-white/60">Current Price</span>
-                <span className="font-bold">${currentPrice.toLocaleString()}</span>
+        {/* Betting Section */}
+        {canBet && (
+          <Card variant="glass" className="p-6 mb-6">
+            <h3 className="text-xl font-bold mb-4">Place Your Bet</h3>
+            
+            {betError && (
+              <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                {betError}
               </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(currentPrice / targetPrice) * 100}%` }}
-                  transition={{ duration: 1 }}
-                  className="h-full gradient-primary"
-                />
+            )}
+            
+            {betSuccess && (
+              <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm flex items-center gap-2">
+                <CheckCircle size={16} />
+                Bet placed successfully! Refreshing...
               </div>
+            )}
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Stake Amount ({currency})</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={betAmount}
+                onChange={(e) => setBetAmount(parseFloat(e.target.value) || 0.01)}
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none"
+                disabled={isBetting}
+              />
             </div>
             
-            <div className="flex justify-between items-center p-4 bg-white/5 rounded-lg">
+            <div className="grid grid-cols-2 gap-4">
+              <Button
+                variant={selectedPrediction === 'yes' ? 'primary' : 'outline'}
+                className="h-20 text-xl font-bold"
+                onClick={() => {
+                  setSelectedPrediction('yes')
+                  handleBet('yes')
+                }}
+                disabled={isBetting}
+              >
+                {isBetting && selectedPrediction === 'yes' ? (
+                  <Loader2 className="animate-spin" size={24} />
+                ) : (
+                  <>
+                    <CheckCircle size={24} className="mr-2" />
+                    YES
+                  </>
+                )}
+              </Button>
+              
+              <Button
+                variant={selectedPrediction === 'no' ? 'primary' : 'outline'}
+                className="h-20 text-xl font-bold"
+                onClick={() => {
+                  setSelectedPrediction('no')
+                  handleBet('no')
+                }}
+                disabled={isBetting}
+              >
+                {isBetting && selectedPrediction === 'no' ? (
+                  <Loader2 className="animate-spin" size={24} />
+                ) : (
+                  <>
+                    <XCircle size={24} className="mr-2" />
+                    NO
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card>
+        )}
+        
+        {/* User's Participation */}
+        {hasParticipated && userParticipation && (
+          <Card variant="glass" className="p-6 mb-6">
+            <h3 className="text-xl font-bold mb-4">Your Bet</h3>
+            <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-white/60 mb-1">Target to Hit</div>
-                <div className="text-2xl font-bold">${targetPrice.toLocaleString()}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-white/60 mb-1">Remaining</div>
-                <div className="text-xl font-bold text-accent">
-                  ${(targetPrice - currentPrice).toLocaleString()}
+                <div className="text-2xl font-bold mb-1">
+                  {userParticipation.prediction.toUpperCase()}
+                </div>
+                <div className="text-white/60">
+                  Stake: {userParticipation.stake.toFixed(2)} {currency}
                 </div>
               </div>
+              {duel.status === 'resolved' && (
+                <Badge variant={userParticipation.won ? 'success' : 'danger'}>
+                  {userParticipation.won ? 'Won' : 'Lost'}
+                </Badge>
+              )}
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
         
-        {/* Mini Chart Placeholder */}
-        <Card variant="glass" className="p-6 mb-6">
-          <h3 className="text-xl font-bold mb-4">Price History</h3>
-          <div className="h-32 bg-white/5 rounded-lg flex items-center justify-center text-white/40">
-            Chart visualization would go here
-          </div>
-        </Card>
+        {/* Creator Notice */}
+        {isCreator && (
+          <Card variant="glass" className="p-6 mb-6">
+            <p className="text-white/60 text-center">
+              You created this duel. You cannot bet on your own prediction.
+            </p>
+          </Card>
+        )}
         
-        {/* Actions */}
-        {status === 'waiting' && (
-          <Button variant="destructive" className="w-full">
-            <X className="mr-2" size={18} />
-            Cancel Duel
-          </Button>
+        {/* Participants List */}
+        {duel.participants.length > 0 && (
+          <Card variant="glass" className="p-6">
+            <h3 className="text-xl font-bold mb-4">
+              Participants ({duel.participants.length})
+            </h3>
+            <div className="space-y-2">
+              {duel.participants.map((participant) => (
+                <div
+                  key={participant.id}
+                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                      participant.prediction === 'yes' ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
+                    }`}>
+                      {participant.user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold">@{participant.user.username}</div>
+                      <div className="text-sm text-white/60">
+                        {participant.prediction.toUpperCase()} - {participant.stake.toFixed(2)} {currency}
+                      </div>
+                    </div>
+                  </div>
+                  {duel.status === 'resolved' && (
+                    <Badge variant={participant.won ? 'success' : 'danger'}>
+                      {participant.won ? 'Won' : 'Lost'}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
         )}
       </div>
       
@@ -212,4 +480,3 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     </div>
   )
 }
-

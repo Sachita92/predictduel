@@ -70,6 +70,28 @@ export async function GET(request: NextRequest) {
       // Continue without stats
     }
 
+    // Get duels created by the user
+    let createdDuels: any[] = []
+    let totalCreatedCount = 0
+    try {
+      // Get total count
+      totalCreatedCount = await Duel.countDocuments({
+        creator: user._id,
+      })
+      
+      // Get recent created duels
+      createdDuels = await Duel.find({
+        creator: user._id,
+      })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate('participants.user', 'username')
+        .lean()
+    } catch (error) {
+      console.error('Error fetching created duels:', error)
+      // Continue without created duels
+    }
+
     return NextResponse.json({
       user: {
         id: user._id,
@@ -104,6 +126,20 @@ export async function GET(request: NextRequest) {
         }
       }),
       categoryStats,
+      createdQuestions: createdDuels.map((duel: any) => ({
+        id: duel._id.toString(),
+        question: duel.question,
+        category: duel.category,
+        status: duel.status,
+        stake: duel.stake,
+        deadline: duel.deadline,
+        poolSize: duel.poolSize,
+        participantsCount: duel.participants?.length || 0,
+        yesCount: duel.yesCount || 0,
+        noCount: duel.noCount || 0,
+        createdAt: duel.createdAt,
+      })),
+      createdQuestionsCount: totalCreatedCount,
     })
   } catch (error) {
     console.error('Error fetching profile:', error)

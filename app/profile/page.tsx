@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet } from 'lucide-react'
+import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet, FileQuestion } from 'lucide-react'
 import { usePrivy } from '@privy-io/react-auth'
 import { useRouter } from 'next/navigation'
 import TopNav from '@/components/navigation/TopNav'
@@ -50,12 +50,28 @@ interface CategoryStat {
   color: string
 }
 
+interface CreatedQuestion {
+  id: string
+  question: string
+  category: string
+  status: string
+  stake: number
+  deadline: string
+  poolSize: number
+  participantsCount: number
+  yesCount: number
+  noCount: number
+  createdAt: string
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const { ready, authenticated, user } = usePrivy()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([])
+  const [createdQuestions, setCreatedQuestions] = useState<CreatedQuestion[]>([])
+  const [createdQuestionsCount, setCreatedQuestionsCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [balance, setBalance] = useState<number | null>(null)
@@ -120,6 +136,8 @@ export default function ProfilePage() {
         setProfile(data.user)
         setRecentActivity(data.recentActivity || [])
         setCategoryStats(data.categoryStats || [])
+        setCreatedQuestions(data.createdQuestions || [])
+        setCreatedQuestionsCount(data.createdQuestionsCount || 0)
         setEditForm({
           name: data.user.name || '',
           username: data.user.username || '',
@@ -554,6 +572,83 @@ export default function ProfilePage() {
           </Card>
         </div>
         
+        {/* Created Questions */}
+        <Card variant="glass" className="p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <FileQuestion className="text-primary-from" size={24} />
+              Questions Created
+            </h3>
+            <Badge variant="info">{createdQuestionsCount} Questions</Badge>
+          </div>
+          {createdQuestions.length > 0 ? (
+            <div className="space-y-3">
+              {createdQuestions.map((question, index) => (
+                <motion.div
+                  key={question.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center justify-between p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/duel/${question.id}`)}
+                >
+                  <div className="flex-1">
+                    <div className="font-semibold mb-1 line-clamp-2">{question.question}</div>
+                    <div className="flex items-center gap-3 text-sm text-white/60">
+                      <Badge variant="outline" className="text-xs">
+                        {question.category}
+                      </Badge>
+                      <span className="text-white/40">
+                        {question.participantsCount} participant{question.participantsCount !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-white/40">
+                        Pool: {question.poolSize.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-white/40">
+                      <span>Yes: {question.yesCount}</span>
+                      <span>No: {question.noCount}</span>
+                      <span>
+                        {new Date(question.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ml-4 text-right">
+                    <Badge 
+                      variant={
+                        question.status === 'active' ? 'success' :
+                        question.status === 'resolved' ? 'info' :
+                        question.status === 'pending' ? 'warning' :
+                        'danger'
+                      }
+                    >
+                      {question.status}
+                    </Badge>
+                    <div className="text-xs text-white/40 mt-2">
+                      {new Date(question.deadline) > new Date() 
+                        ? `Ends ${new Date(question.deadline).toLocaleDateString()}`
+                        : 'Ended'
+                      }
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-white/60">
+              <FileQuestion size={48} className="mx-auto mb-4 opacity-30" />
+              <p>You haven't created any questions yet.</p>
+              <Button
+                className="mt-4"
+                variant="outline"
+                onClick={() => router.push('/create')}
+              >
+                Create Your First Question
+              </Button>
+            </div>
+          )}
+        </Card>
+
         {/* Recent Activity */}
         <Card variant="glass" className="p-6">
           <h3 className="text-xl font-bold mb-4">Recent Activity</h3>

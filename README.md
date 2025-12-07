@@ -21,6 +21,10 @@ A modern, playful, and highly engaging web interface for PredictDuel - a social 
 - **Tailwind CSS** - Utility-first styling
 - **Framer Motion** - Smooth animations and interactions
 - **React Confetti** - Celebration effects
+- **MongoDB** - Database for storing duels and user data
+- **Mongoose** - MongoDB ODM
+- **Solana** - Blockchain for prediction markets
+- **Privy** - Wallet authentication
 
 ## Design System
 
@@ -42,12 +46,29 @@ A modern, playful, and highly engaging web interface for PredictDuel - a social 
 npm install
 ```
 
-2. Run the development server:
+2. Set up environment variables:
+   - Copy `env.example` to `.env.local`
+   - Configure your MongoDB connection (see below)
+
+3. Set up MongoDB:
+   
+   **Option 1: MongoDB Atlas (Recommended)**
+   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+   - Create a free cluster
+   - Get your connection string
+   - Add it to `.env.local` as `MONGODB_URI`
+   
+   **Option 2: Local MongoDB**
+   - Install MongoDB from [mongodb.com](https://www.mongodb.com/try/download/community)
+   - Start MongoDB service
+   - Use `mongodb://127.0.0.1:27017/predictduel` in `.env.local`
+
+4. Run the development server:
 ```bash
 npm run dev
 ```
 
-3. Open [http://localhost:3000](http://localhost:3000) in your browser
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ## Project Structure
 
