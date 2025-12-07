@@ -88,9 +88,28 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   
   const isCreator = user?.id && duel?.creator.privyId === user.id
   const hasParticipated = !!userParticipation
-  const canBet = authenticated && !isCreator && !hasParticipated && 
-                 duel?.status === 'active' && 
-                 new Date(duel.deadline) > new Date()
+  const isDuelActive = duel?.status === 'active' || duel?.status === 'pending'
+  const isDeadlineValid = duel?.deadline && new Date(duel.deadline) > new Date()
+  const canBet = authenticated && !isCreator && !hasParticipated && isDuelActive && isDeadlineValid
+  
+  // Debug logging
+  useEffect(() => {
+    if (duel && user) {
+      console.log('Betting Debug:', {
+        authenticated,
+        isCreator,
+        hasParticipated,
+        isDuelActive,
+        isDeadlineValid,
+        canBet,
+        duelStatus: duel.status,
+        deadline: duel.deadline,
+        currentUserId,
+        userParticipation: userParticipation ? 'found' : 'not found',
+        participants: duel.participants.length
+      })
+    }
+  }, [duel, user, authenticated, isCreator, hasParticipated, isDuelActive, isDeadlineValid, canBet, currentUserId])
   
   useEffect(() => {
     // Handle both sync and async params (Next.js 14 vs 15)
@@ -336,9 +355,21 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         </Card>
         
         {/* Betting Section */}
-        {canBet && (
+        {authenticated && !isCreator && (
           <Card variant="glass" className="p-6 mb-6">
             <h3 className="text-xl font-bold mb-4">Place Your Bet</h3>
+            
+            {!canBet && (
+              <div className="mb-4 p-3 bg-warning/20 border border-warning/30 rounded-lg text-warning text-sm">
+                {hasParticipated 
+                  ? 'You have already placed a bet on this duel.'
+                  : !isDuelActive
+                  ? `This duel is ${duel?.status}. Betting is not available.`
+                  : !isDeadlineValid
+                  ? 'The deadline for this duel has passed.'
+                  : 'Betting is currently unavailable.'}
+              </div>
+            )}
             
             {betError && (
               <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
@@ -362,7 +393,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 value={betAmount}
                 onChange={(e) => setBetAmount(parseFloat(e.target.value) || 0.01)}
                 className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none"
-                disabled={isBetting}
+                disabled={isBetting || !canBet}
               />
             </div>
             
@@ -371,10 +402,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 variant={selectedPrediction === 'yes' ? 'primary' : 'outline'}
                 className="h-20 text-xl font-bold"
                 onClick={() => {
-                  setSelectedPrediction('yes')
-                  handleBet('yes')
+                  if (canBet && !isBetting) {
+                    setSelectedPrediction('yes')
+                    handleBet('yes')
+                  }
                 }}
-                disabled={isBetting}
+                disabled={isBetting || !canBet}
               >
                 {isBetting && selectedPrediction === 'yes' ? (
                   <Loader2 className="animate-spin" size={24} />
@@ -390,10 +423,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 variant={selectedPrediction === 'no' ? 'primary' : 'outline'}
                 className="h-20 text-xl font-bold"
                 onClick={() => {
-                  setSelectedPrediction('no')
-                  handleBet('no')
+                  if (canBet && !isBetting) {
+                    setSelectedPrediction('no')
+                    handleBet('no')
+                  }
                 }}
-                disabled={isBetting}
+                disabled={isBetting || !canBet}
               >
                 {isBetting && selectedPrediction === 'no' ? (
                   <Loader2 className="animate-spin" size={24} />

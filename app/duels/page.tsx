@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Clock, Users, TrendingUp, Loader2, Filter } from 'lucide-react'
-import { usePrivy } from '@privy-io/react-auth'
+import { Clock, Users, TrendingUp, Loader2, Filter, CheckCircle, XCircle } from 'lucide-react'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
+import { getWalletAddress } from '@/lib/privy-helpers'
+import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
+import { placeBetOnChain } from '@/lib/solana-bet'
 
 interface Duel {
   id: string
@@ -26,9 +29,11 @@ interface Duel {
     username: string
     avatar: string
     walletAddress: string
+    privyId: string
   }
   participants: number
   createdAt: string
+  marketPda?: string | null
 }
 
 const categories = ['All', 'Crypto', 'Weather', 'Sports', 'Meme', 'Local', 'Other']
@@ -36,10 +41,17 @@ const categories = ['All', 'Crypto', 'Weather', 'Sports', 'Meme', 'Local', 'Othe
 export default function DuelsPage() {
   const router = useRouter()
   const { authenticated, user, ready } = usePrivy()
+  const { wallets } = useWallets()
   const [duels, setDuels] = useState<Duel[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const [bettingDuelId, setBettingDuelId] = useState<string | null>(null)
+  const [betError, setBetError] = useState<string | null>(null)
+  const [betSuccess, setBetSuccess] = useState<string | null>(null)
+  
+  const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
+  const currency = getAppCurrency()
 
   useEffect(() => {
     fetchDuels()
@@ -69,8 +81,113 @@ export default function DuelsPage() {
     }
   }
 
-  const handlePredict = (duelId: string) => {
-    // Navigate to duel detail page where user can make prediction
+  const handleBet = async (duelId: string, prediction: 'yes' | 'no') => {
+    if (!user || !walletAddress) {
+      setBetError('Please connect your wallet')
+      return
+    }
+    
+    const duel = duels.find(d => d.id === duelId)
+    if (!duel) {
+      setBetError('Duel not found')
+      return
+    }
+    
+    if (!duel.marketPda) {
+      setBetError('This duel is not connected to Solana. Please contact support.')
+      return
+    }
+    
+    // Check if user is creator
+    if (user.id && duel.creator.privyId === user.id) {
+      setBetError('You cannot bet on your own duel')
+      return
+    }
+    
+    setBettingDuelId(duelId)
+    setBetError(null)
+    setBetSuccess(null)
+    
+    try {
+      // Get Solana wallet provider
+      let solanaProvider: any = null
+      
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      if (!solanaProvider && wallets.length > 0) {
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Place bet on-chain
+      const onChainResult = await placeBetOnChain(solanaProvider, {
+        marketPda: duel.marketPda,
+        prediction: prediction === 'yes',
+        stakeAmount: duel.stake,
+      })
+      
+      // Update MongoDB
+      const response = await fetch(`/api/duels/${duelId}/bet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          prediction: prediction,
+          stake: duel.stake,
+          transactionSignature: onChainResult.signature,
+          participantPda: onChainResult.participantPda,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to place bet')
+      }
+      
+      setBetSuccess(`Bet placed successfully! ${prediction.toUpperCase()}`)
+      
+      // Refresh duels
+      setTimeout(() => {
+        fetchDuels()
+        setBetSuccess(null)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Error placing bet:', error)
+      setBetError(error instanceof Error ? error.message : 'Failed to place bet')
+    } finally {
+      setBettingDuelId(null)
+    }
+  }
+  
+  const handleViewDuel = (duelId: string) => {
     router.push(`/duel/${duelId}`)
   }
 
@@ -256,13 +373,65 @@ export default function DuelsPage() {
                     </div>
                   </div>
 
-                  {/* Action Button */}
+                  {/* Error/Success Messages */}
+                  {betError && bettingDuelId === duel.id && (
+                    <div className="mb-3 p-2 bg-danger/20 border border-danger/30 rounded-lg text-danger text-xs">
+                      {betError}
+                    </div>
+                  )}
+                  
+                  {betSuccess && bettingDuelId === duel.id && (
+                    <div className="mb-3 p-2 bg-success/20 border border-success/30 rounded-lg text-success text-xs">
+                      {betSuccess}
+                    </div>
+                  )}
+
+                  {/* Betting Buttons */}
+                  {authenticated && user?.id !== duel.creator.privyId && 
+                   (duel.status === 'active' || duel.status === 'pending') &&
+                   new Date(duel.deadline) > new Date() && (
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <Button
+                        variant="primary"
+                        className="h-14 text-lg font-bold"
+                        onClick={() => handleBet(duel.id, 'yes')}
+                        disabled={bettingDuelId === duel.id}
+                      >
+                        {bettingDuelId === duel.id ? (
+                          <Loader2 className="animate-spin" size={20} />
+                        ) : (
+                          <>
+                            <CheckCircle size={20} className="mr-2" />
+                            YES
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        className="h-14 text-lg font-bold"
+                        onClick={() => handleBet(duel.id, 'no')}
+                        disabled={bettingDuelId === duel.id}
+                      >
+                        {bettingDuelId === duel.id ? (
+                          <Loader2 className="animate-spin" size={20} />
+                        ) : (
+                          <>
+                            <XCircle size={20} className="mr-2" />
+                            NO
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* View Details Button */}
                   <Button
-                    onClick={() => handlePredict(duel.id)}
+                    onClick={() => handleViewDuel(duel.id)}
+                    variant="secondary"
                     className="w-full"
-                    glow
                   >
-                    Make Prediction
+                    View Details
                   </Button>
                 </Card>
               </motion.div>

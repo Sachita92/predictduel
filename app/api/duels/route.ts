@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch duels with creator information
     const duels = await Duel.find(query)
-      .populate('creator', 'username avatar walletAddress')
+      .populate('creator', 'username avatar walletAddress privyId')
       .sort({ createdAt: -1 }) // Newest first
       .limit(limit)
       .skip(skip)
@@ -60,11 +60,13 @@ export async function GET(req: NextRequest) {
       poolSize: duel.poolSize,
       yesCount: duel.yesCount,
       noCount: duel.noCount,
+      marketPda: duel.marketPda || null,
       creator: {
         id: duel.creator?._id?.toString() || '',
         username: duel.creator?.username || 'Unknown',
         avatar: duel.creator?.avatar || '',
         walletAddress: duel.creator?.walletAddress || '',
+        privyId: (duel.creator as any)?.privyId || '',
       },
       participants: duel.participants?.length || 0,
       createdAt: duel.createdAt,
