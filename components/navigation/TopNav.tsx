@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Search, Bell, Wallet, User } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
@@ -13,10 +13,25 @@ import ProfileDropdown from '@/components/user/ProfileDropdown'
 
 export default function TopNav() {
   const router = useRouter()
-  const { ready, authenticated, login } = usePrivy()
+  const { ready, authenticated, login, user } = usePrivy()
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  
+  // Fetch initial unread count
+  useEffect(() => {
+    if (authenticated && user?.id) {
+      fetch(`/api/notifications?privyId=${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.unreadCount !== undefined) {
+            setUnreadCount(data.unreadCount)
+          }
+        })
+        .catch(err => console.error('Error fetching unread count:', err))
+    }
+  }, [authenticated, user?.id])
   
   const handleWalletClick = useCallback(() => {
     if (authenticated) {
@@ -52,7 +67,11 @@ export default function TopNav() {
               className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
             >
               <Bell size={20} className="text-white/80" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full animate-pulse" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-danger rounded-full flex items-center justify-center text-xs font-bold px-1 animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </motion.button>
             
             {ready ? (
@@ -81,7 +100,11 @@ export default function TopNav() {
       </nav>
       
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <NotificationDropdown isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+      <NotificationDropdown 
+        isOpen={isNotificationsOpen} 
+        onClose={() => setIsNotificationsOpen(false)}
+        onUnreadCountChange={setUnreadCount}
+      />
       <ProfileDropdown isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </>
   )

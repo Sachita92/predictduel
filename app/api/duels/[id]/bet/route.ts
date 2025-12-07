@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
+import Notification from '@/models/Notification'
 
 /**
  * API Route to Place a Bet on a Duel
@@ -144,6 +145,25 @@ export async function POST(
       // Activate duel if it was pending
       if (duel.status === 'pending') {
         duel.status = 'active'
+      }
+
+      // Create notification for the creator when someone bets on their duel
+      try {
+        const creator = await User.findById(duel.creator)
+        if (creator && creator._id.toString() !== user._id.toString()) {
+          await Notification.create({
+            user: duel.creator,
+            type: 'bet',
+            title: 'New Bet on Your Duel',
+            message: `@${user.username} placed a bet on your duel: "${duel.question}"`,
+            read: false,
+            actionUrl: `/duel/${duelId}`,
+            relatedUser: user._id,
+          })
+        }
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError)
+        // Don't fail the bet if notification creation fails
       }
     }
 

@@ -39,7 +39,7 @@ interface Activity {
   id: string
   opponent: string
   prediction: string
-  outcome: 'Won' | 'Lost' | 'Active' | 'Pending' | string
+  outcome: 'Won' | 'Lost' | 'Active' | 'Pending' | 'Resolved' | string
   amount: number
   date: string
   status?: string
@@ -47,6 +47,7 @@ interface Activity {
   isCreator?: boolean
   stake?: number
   deadline?: string
+  participantCount?: number
 }
 
 interface CategoryStat {
@@ -648,7 +649,13 @@ export default function ProfilePage() {
                       <Badge variant="info" className="text-xs">
                         {activity.category || 'Other'}
                       </Badge>
-                      <span className="font-semibold">vs @{activity.opponent}</span>
+                      {activity.isCreator ? (
+                        <span className="font-semibold text-primary-from">
+                          Created • {activity.participantCount || 0} {(activity.participantCount || 0) === 1 ? 'bet' : 'bets'}
+                        </span>
+                      ) : (
+                        <span className="font-semibold">vs @{activity.opponent}</span>
+                      )}
                     </div>
                     <div className="text-sm text-white/60 line-clamp-1 mb-1">
                       {activity.prediction}

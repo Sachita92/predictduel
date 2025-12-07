@@ -2,77 +2,49 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, X, Trophy, Zap, Users, Check } from 'lucide-react'
+import { Bell, X, Trophy, Zap, Users, Check, Loader2 } from 'lucide-react'
+import { usePrivy } from '@privy-io/react-auth'
+import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 
 interface Notification {
   id: string
-  type: 'win' | 'challenge' | 'reminder' | 'achievement'
+  type: 'win' | 'challenge' | 'reminder' | 'achievement' | 'system' | 'bet'
   title: string
   message: string
   time: string
   read: boolean
   actionUrl?: string
+  createdAt?: string
 }
 
 interface NotificationDropdownProps {
   isOpen: boolean
   onClose: () => void
+  onUnreadCountChange?: (count: number) => void
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'win',
-    title: 'You Won! 🎉',
-    message: 'You won 0.5 SOL predicting BTC pump!',
-    time: '2m ago',
-    read: false,
-    actionUrl: '/duel/1',
-  },
-  {
-    id: '2',
-    type: 'challenge',
-    title: 'New Challenge',
-    message: '@alice challenged you to predict: Will SOL hit $200?',
-    time: '15m ago',
-    read: false,
-    actionUrl: '/duel/2',
-  },
-  {
-    id: '3',
-    type: 'achievement',
-    title: 'Achievement Unlocked! 🏆',
-    message: 'You earned the "5-Win Streak" badge!',
-    time: '1h ago',
-    read: true,
-  },
-  {
-    id: '4',
-    type: 'reminder',
-    title: 'Prediction Ending Soon',
-    message: 'Your prediction "Will BTC hit $100K?" ends in 30 minutes',
-    time: '2h ago',
-    read: true,
-    actionUrl: '/duel/3',
-  },
-  {
-    id: '5',
-    type: 'win',
-    title: 'You Won! 🎉',
-    message: 'You won 0.2 SOL in a weather prediction',
-    time: '3h ago',
-    read: true,
-  },
-]
+// Helper function to format time ago
+const formatTimeAgo = (date: string | Date): string => {
+  const now = new Date()
+  const past = new Date(date)
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000)
+
+  if (diffInSeconds < 60) return `${diffInSeconds}s ago`
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
+  return past.toLocaleDateString()
+}
 
 const getNotificationIcon = (type: Notification['type']) => {
   switch (type) {
     case 'win':
       return <Trophy className="text-success" size={20} />
     case 'challenge':
+    case 'bet':
       return <Users className="text-primary-from" size={20} />
     case 'achievement':
       return <Trophy className="text-accent" size={20} />
@@ -83,10 +55,50 @@ const getNotificationIcon = (type: Notification['type']) => {
   }
 }
 
-export default function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
-  const [notifications, setNotifications] = useState(mockNotifications)
+export default function NotificationDropdown({ isOpen, onClose, onUnreadCountChange }: NotificationDropdownProps) {
+  const { user } = usePrivy()
+  const router = useRouter()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const unreadCount = notifications.filter(n => !n.read).length
+
+  // Notify parent of unread count changes
+  useEffect(() => {
+    if (onUnreadCountChange) {
+      onUnreadCountChange(unreadCount)
+    }
+  }, [unreadCount, onUnreadCountChange])
+
+  // Fetch notifications when dropdown opens
+  useEffect(() => {
+    if (isOpen && user?.id) {
+      fetchNotifications()
+    }
+  }, [isOpen, user?.id])
+
+  const fetchNotifications = async () => {
+    if (!user?.id) return
+    
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/notifications?privyId=${user.id}`)
+      const data = await response.json()
+
+      if (response.ok && data.notifications) {
+        // Format notifications with time ago
+        const formatted = data.notifications.map((notif: any) => ({
+          ...notif,
+          time: formatTimeAgo(notif.createdAt || new Date()),
+        }))
+        setNotifications(formatted)
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -104,14 +116,54 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     }
   }, [isOpen, onClose])
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
+    if (!user?.id) return
+
+    // Optimistically update UI
     setNotifications(prev =>
       prev.map(notif => notif.id === id ? { ...notif, read: true } : notif)
     )
+
+    try {
+      await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          notificationId: id,
+        }),
+      })
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+      // Revert on error
+      fetchNotifications()
+    }
   }
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    if (!user?.id) return
+
+    // Optimistically update UI
     setNotifications(prev => prev.map(notif => ({ ...notif, read: true })))
+
+    try {
+      await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          markAll: true,
+        }),
+      })
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error)
+      // Revert on error
+      fetchNotifications()
+    }
   }
 
   if (!isOpen) return null
@@ -166,7 +218,12 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
 
             {/* Notifications List */}
             <div className="max-h-96 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {isLoading ? (
+                <div className="p-8 text-center text-white/60">
+                  <Loader2 className="mx-auto mb-4 animate-spin" size={32} />
+                  <p>Loading notifications...</p>
+                </div>
+              ) : notifications.length === 0 ? (
                 <div className="p-8 text-center text-white/60">
                   <Bell size={48} className="mx-auto mb-4 opacity-50" />
                   <p>No notifications yet</p>
@@ -183,9 +240,12 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
                         !notification.read && 'bg-primary-from/5'
                       )}
                       onClick={() => {
-                        markAsRead(notification.id)
+                        if (!notification.read) {
+                          markAsRead(notification.id)
+                        }
                         if (notification.actionUrl) {
-                          window.location.href = notification.actionUrl
+                          router.push(notification.actionUrl)
+                          onClose()
                         }
                       }}
                     >

@@ -45,16 +45,47 @@ export async function GET(request: NextRequest) {
       // Continue without achievements
     }
 
-    // Get recent duels for activity feed - show all duels user participated in (not just resolved)
+    // Get recent duels for activity feed - show duels user participated in AND duels user created
     let recentDuels: any[] = []
     try {
-      recentDuels = await Duel.find({
+      // Get duels user participated in
+      const participatedDuels = await Duel.find({
         'participants.user': user._id,
       })
         .sort({ updatedAt: -1 })
         .limit(20)
         .populate('creator', 'username')
         .populate('participants.user', 'username')
+        .lean()
+
+      // Get duels user created
+      const createdDuels = await Duel.find({
+        creator: user._id,
+      })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .populate('creator', 'username')
+        .populate('participants.user', 'username')
+        .lean()
+
+      // Combine and deduplicate by _id, then sort by updatedAt
+      const allDuelsMap = new Map()
+      
+      participatedDuels.forEach((duel: any) => {
+        allDuelsMap.set(duel._id.toString(), duel)
+      })
+      
+      createdDuels.forEach((duel: any) => {
+        allDuelsMap.set(duel._id.toString(), duel)
+      })
+
+      recentDuels = Array.from(allDuelsMap.values())
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.updatedAt || a.createdAt).getTime()
+          const dateB = new Date(b.updatedAt || b.createdAt).getTime()
+          return dateB - dateA
+        })
+        .slice(0, 20)
     } catch (error) {
       console.error('Error fetching duels:', error)
       // Continue without duels
@@ -107,15 +138,51 @@ export async function GET(request: NextRequest) {
       },
       recentActivity: recentDuels.map((duel: any) => {
         // Check if user is the creator
-        const isCreator = duel.creator._id.toString() === user._id.toString()
+        const isCreator = duel.creator._id?.toString() === user._id.toString() || 
+                         duel.creator.toString() === user._id.toString()
         
         // Find the user's participation
-        const userParticipation = duel.participants.find(
-          (p: any) => p.user._id.toString() === user._id.toString()
+        const userParticipation = duel.participants?.find(
+          (p: any) => {
+            const participantUserId = p.user?._id?.toString() || p.user?.toString()
+            return participantUserId === user._id.toString()
+          }
         )
-        // Find opponent (other participant or creator if no other participants)
-        const opponent = duel.participants.find(
-          (p: any) => p.user._id.toString() !== user._id.toString()
+        
+        // For created duels, show participant count or "No bets yet"
+        if (isCreator) {
+          const participantCount = duel.participants?.length || 0
+          const firstParticipant = duel.participants?.[0]
+          const opponent = firstParticipant?.user?.username || 'No bets yet'
+          
+          return {
+            id: duel._id.toString(),
+            opponent: participantCount > 0 ? `@${opponent}` : opponent,
+            prediction: duel.question,
+            outcome: duel.status === 'resolved' 
+              ? 'Resolved'
+              : duel.status === 'active' 
+              ? 'Active'
+              : duel.status === 'pending'
+              ? 'Pending'
+              : duel.status,
+            amount: duel.poolSize || duel.stake || 0,
+            date: duel.updatedAt || duel.createdAt,
+            status: duel.status,
+            category: duel.category,
+            isCreator: true,
+            stake: duel.stake,
+            deadline: duel.deadline,
+            participantCount: participantCount,
+          }
+        }
+        
+        // For participated duels
+        const opponent = duel.participants?.find(
+          (p: any) => {
+            const participantUserId = p.user?._id?.toString() || p.user?.toString()
+            return participantUserId !== user._id.toString()
+          }
         ) || { user: duel.creator }
 
         return {
@@ -133,7 +200,7 @@ export async function GET(request: NextRequest) {
           date: duel.updatedAt || duel.createdAt,
           status: duel.status,
           category: duel.category,
-          isCreator: isCreator,
+          isCreator: false,
           stake: duel.stake,
           deadline: duel.deadline,
         }
