@@ -45,15 +45,14 @@ export async function GET(request: NextRequest) {
       // Continue without achievements
     }
 
-    // Get recent duels for activity feed - wrap in try-catch
+    // Get recent duels for activity feed - show all duels user participated in (not just resolved)
     let recentDuels: any[] = []
     try {
       recentDuels = await Duel.find({
         'participants.user': user._id,
-        status: 'resolved',
       })
         .sort({ updatedAt: -1 })
-        .limit(10)
+        .limit(20)
         .populate('creator', 'username')
         .populate('participants.user', 'username')
     } catch (error) {
@@ -111,35 +110,29 @@ export async function GET(request: NextRequest) {
         const userParticipation = duel.participants.find(
           (p: any) => p.user._id.toString() === user._id.toString()
         )
-        // Find opponent (other participant)
+        // Find opponent (other participant or creator if no other participants)
         const opponent = duel.participants.find(
           (p: any) => p.user._id.toString() !== user._id.toString()
-        )
+        ) || { user: duel.creator }
 
         return {
-          id: duel._id,
-          opponent: opponent?.user?.username || 'Unknown',
+          id: duel._id.toString(),
+          opponent: opponent?.user?.username || duel.creator?.username || 'Unknown',
           prediction: duel.question,
-          outcome: userParticipation?.won ? 'Won' : 'Lost',
+          outcome: duel.status === 'resolved' 
+            ? (userParticipation?.won ? 'Won' : 'Lost')
+            : duel.status === 'active' 
+            ? 'Active'
+            : duel.status === 'pending'
+            ? 'Pending'
+            : duel.status,
           amount: userParticipation?.stake || 0,
-          date: duel.updatedAt,
+          date: duel.updatedAt || duel.createdAt,
+          status: duel.status,
+          category: duel.category,
         }
       }),
       categoryStats,
-      createdQuestions: createdDuels.map((duel: any) => ({
-        id: duel._id.toString(),
-        question: duel.question,
-        category: duel.category,
-        status: duel.status,
-        stake: duel.stake,
-        deadline: duel.deadline,
-        poolSize: duel.poolSize,
-        participantsCount: duel.participants?.length || 0,
-        yesCount: duel.yesCount || 0,
-        noCount: duel.noCount || 0,
-        createdAt: duel.createdAt,
-      })),
-      createdQuestionsCount: totalCreatedCount,
     })
   } catch (error) {
     console.error('Error fetching profile:', error)

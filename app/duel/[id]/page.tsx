@@ -378,9 +378,8 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             )}
             
             {betSuccess && (
-              <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm flex items-center gap-2">
-                <CheckCircle size={16} />
-                Bet placed successfully! Refreshing...
+              <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm">
+                ✓ Bet placed successfully! Refreshing...
               </div>
             )}
             

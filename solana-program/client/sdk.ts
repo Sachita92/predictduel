@@ -205,9 +205,11 @@ export class PredictDuelClient {
     const { marketPda, prediction, stakeAmount } = params;
 
     // Fetch market account to get creator and market_index
-    const marketAccount = await this.program.account.market.fetch(marketPda);
-    const creator = marketAccount.creator as PublicKey;
-    const marketIndex = marketAccount.marketIndex as number;
+    // Use type assertion to access account namespace
+    const accountNamespace = this.program.account as any;
+    const marketAccount = await accountNamespace.market.fetch(marketPda);
+    const creator = new PublicKey(marketAccount.creator);
+    const marketIndex = Number(marketAccount.marketIndex);
 
     // Derive participant PDA
     const [participantPda] = PublicKey.findProgramAddressSync(
@@ -220,8 +222,10 @@ export class PredictDuelClient {
     );
 
     // Derive market vault PDA using correct seeds: [market_vault, creator, market_index]
-    const marketIndexBuffer = Buffer.allocUnsafe(8);
-    marketIndexBuffer.writeBigUInt64LE(BigInt(marketIndex), 0);
+    // Use anchor.BN for browser compatibility (same approach as claimWinnings)
+    const marketIndexBN = new anchor.BN(marketIndex);
+    const marketIndexArray = marketIndexBN.toArray("le", 8);
+    const marketIndexBuffer = Buffer.from(marketIndexArray);
     
     const [marketVaultPda] = PublicKey.findProgramAddressSync(
       [
