@@ -354,10 +354,11 @@ export default function CreatePage() {
                 
                 <div>
                   <label className="block mb-2 font-semibold">Deadline</label>
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-2 mb-4 flex-wrap">
                     {quickDeadlines.map((qd) => (
                       <button
                         key={qd.label}
+                        type="button"
                         onClick={() => setDeadline(qd.value)}
                         className={`
                           px-4 py-2 rounded-lg transition-all
@@ -370,11 +371,34 @@ export default function CreatePage() {
                         {qd.label}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Set deadline to 1 hour ago for testing resolve functionality
+                        const oneHourAgo = Date.now() - 3600000
+                        setDeadline(oneHourAgo)
+                      }}
+                      className="px-4 py-2 rounded-lg bg-warning/20 hover:bg-warning/30 text-warning border border-warning/30 transition-all text-sm"
+                      title="Set deadline to 1 hour ago (for testing resolve)"
+                    >
+                      Test (Past)
+                    </button>
                   </div>
                   <input
                     type="datetime-local"
+                    value={new Date(Date.now() + deadline).toISOString().slice(0, 16)}
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value).getTime()
+                      const now = Date.now()
+                      setDeadline(selectedDate - now)
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-primary-from"
                   />
+                  {deadline < 0 && (
+                    <p className="mt-2 text-sm text-warning">
+                      ⚠️ Deadline is in the past - good for testing resolve functionality!
+                    </p>
+                  )}
                 </div>
                 
                 <div>

@@ -21,7 +21,7 @@ const mockPredictions = [
   {
     id: '2',
     creator: { avatar: '', username: 'bob' },
-    question: 'Will it rain tomorrow in Kathmandu?',
+    question: 'Will it rain tomorrow?',
     category: 'Weather',
     deadline: new Date(Date.now() + 3600000),
     stake: 0.05,

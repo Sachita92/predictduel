@@ -14,6 +14,8 @@ import CountdownTimer from '@/components/ui/CountdownTimer'
 import { getWalletAddress } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
+import { resolveMarketOnChain } from '@/lib/solana-resolve'
+import { X } from 'lucide-react'
 
 interface Duel {
   id: string
@@ -63,6 +65,13 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [selectedPrediction, setSelectedPrediction] = useState<'yes' | 'no' | null>(null)
   const [betAmount, setBetAmount] = useState(0.1)
   
+  // Resolution state
+  const [isResolving, setIsResolving] = useState(false)
+  const [resolveError, setResolveError] = useState<string | null>(null)
+  const [resolveSuccess, setResolveSuccess] = useState(false)
+  const [showResolveModal, setShowResolveModal] = useState(false)
+  const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no' | null>(null)
+  
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -91,6 +100,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const isDuelActive = duel?.status === 'active' || duel?.status === 'pending'
   const isDeadlineValid = duel?.deadline && new Date(duel.deadline) > new Date()
   const canBet = authenticated && !isCreator && !hasParticipated && isDuelActive && isDeadlineValid
+  
+  // Resolution conditions
+  const deadlineDate = duel ? new Date(duel.deadline) : null
+  const isDeadlinePassed = deadlineDate ? new Date() >= deadlineDate : false
+  const canResolve = isCreator && isDeadlinePassed && duel?.status !== 'resolved' && duel?.status !== 'cancelled'
   
   // Debug logging
   useEffect(() => {
@@ -249,6 +263,100 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
   
+  const handleResolve = async (outcome: 'yes' | 'no') => {
+    if (!duel || !user || !walletAddress) {
+      setResolveError('Please connect your wallet')
+      return
+    }
+    
+    if (!duel.marketPda) {
+      setResolveError('This duel is not connected to Solana. Please contact support.')
+      return
+    }
+    
+    setIsResolving(true)
+    setResolveError(null)
+    setResolveSuccess(false)
+    
+    try {
+      // Step 1: Get Solana wallet provider
+      let solanaProvider: any = null
+      
+      // Try window.solana first (Phantom, Solflare, etc.)
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      // If window.solana not available, try Privy wallets
+      if (!solanaProvider && wallets.length > 0) {
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Step 2: Resolve market on-chain
+      const onChainResult = await resolveMarketOnChain(solanaProvider, {
+        marketPda: duel.marketPda,
+        outcome: outcome === 'yes',
+      })
+      
+      // Step 3: Update MongoDB
+      const response = await fetch(`/api/duels/${id}/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          outcome: outcome,
+          transactionSignature: onChainResult.signature,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resolve duel')
+      }
+      
+      setResolveSuccess(true)
+      setShowResolveModal(false)
+      
+      // Refresh duel data
+      setTimeout(() => {
+        fetchDuel()
+        setResolveSuccess(false)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Error resolving duel:', error)
+      setResolveError(error instanceof Error ? error.message : 'Failed to resolve duel')
+    } finally {
+      setIsResolving(false)
+    }
+  }
+  
   if (!ready || isLoading) {
     return (
       <div className="min-h-screen bg-background-dark">
@@ -279,14 +387,14 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     )
   }
   
-  const deadline = new Date(duel.deadline)
+  const deadline = duel ? new Date(duel.deadline) : new Date()
   const isExpired = new Date() >= deadline
-  const yesStake = duel.participants
-    .filter(p => p.prediction === 'yes')
-    .reduce((sum, p) => sum + p.stake, 0)
-  const noStake = duel.participants
-    .filter(p => p.prediction === 'no')
-    .reduce((sum, p) => sum + p.stake, 0)
+  const yesStake = duel?.participants
+    ?.filter(p => p.prediction === 'yes')
+    .reduce((sum, p) => sum + p.stake, 0) || 0
+  const noStake = duel?.participants
+    ?.filter(p => p.prediction === 'no')
+    .reduce((sum, p) => sum + p.stake, 0) || 0
   
   return (
     <div className="min-h-screen bg-background-dark pb-20">
@@ -397,8 +505,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <Button
-                className="h-20 text-xl font-bold bg-success hover:bg-green-600 text-white border-0"
+              <button
+                type="button"
+                className="h-20 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
                 onClick={() => {
                   if (canBet && !isBetting) {
                     setSelectedPrediction('yes')
@@ -412,10 +521,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 ) : (
                   'YES'
                 )}
-              </Button>
+              </button>
               
-              <Button
-                className="h-20 text-xl font-bold bg-danger hover:bg-red-600 text-white border-0"
+              <button
+                type="button"
+                className="h-20 text-xl font-bold bg-danger hover:bg-red-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
                 onClick={() => {
                   if (canBet && !isBetting) {
                     setSelectedPrediction('no')
@@ -429,7 +539,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 ) : (
                   'NO'
                 )}
-              </Button>
+              </button>
             </div>
           </Card>
         )}
@@ -456,13 +566,150 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
         
-        {/* Creator Notice */}
+        {/* Creator Notice & Resolve Section */}
         {isCreator && (
           <Card variant="glass" className="p-6 mb-6">
-            <p className="text-white/60 text-center">
+            <p className="text-white/60 text-center mb-4">
               You created this duel. You cannot bet on your own prediction.
             </p>
+            
+            {canResolve && (
+              <div className="mt-4">
+                {resolveError && (
+                  <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                    {resolveError}
+                  </div>
+                )}
+                
+                {resolveSuccess && (
+                  <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm">
+                    ✓ Duel resolved successfully! Refreshing...
+                  </div>
+                )}
+                
+                <Button
+                  onClick={() => setShowResolveModal(true)}
+                  disabled={isResolving || duel?.status === 'resolved'}
+                  className="w-full"
+                >
+                  {isResolving ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2" size={20} />
+                      Resolving...
+                    </>
+                  ) : (
+                    'Resolve Duel'
+                  )}
+                </Button>
+              </div>
+            )}
+            
+            {duel?.status === 'resolved' && (
+              <div className="mt-4 text-center">
+                <Badge variant="info" className="text-lg px-4 py-2">
+                  Resolved: {duel.outcome?.toUpperCase()}
+                </Badge>
+              </div>
+            )}
           </Card>
+        )}
+        
+        {/* Resolve Modal */}
+        {showResolveModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold">Resolve Duel</h3>
+                <button
+                  onClick={() => {
+                    setShowResolveModal(false)
+                    setResolveError(null)
+                    setSelectedOutcome(null)
+                  }}
+                  className="text-white/60 hover:text-white transition-colors"
+                  disabled={isResolving}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <p className="text-white/70 mb-6">
+                Select the final outcome for this duel. This action cannot be undone.
+              </p>
+              
+              {resolveError && (
+                <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                  {resolveError}
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <button
+                  type="button"
+                  className={`h-20 text-xl font-bold rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+                    selectedOutcome === 'yes'
+                      ? 'bg-success text-white border-2 border-success'
+                      : 'bg-success/20 text-success border-2 border-success/30 hover:bg-success/30'
+                  }`}
+                  onClick={() => setSelectedOutcome('yes')}
+                  disabled={isResolving}
+                >
+                  YES
+                </button>
+                
+                <button
+                  type="button"
+                  className={`h-20 text-xl font-bold rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+                    selectedOutcome === 'no'
+                      ? 'bg-danger text-white border-2 border-danger'
+                      : 'bg-danger/20 text-danger border-2 border-danger/30 hover:bg-danger/30'
+                  }`}
+                  onClick={() => setSelectedOutcome('no')}
+                  disabled={isResolving}
+                >
+                  NO
+                </button>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowResolveModal(false)
+                    setResolveError(null)
+                    setSelectedOutcome(null)
+                  }}
+                  disabled={isResolving}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (selectedOutcome) {
+                      handleResolve(selectedOutcome)
+                    }
+                  }}
+                  disabled={isResolving || !selectedOutcome}
+                  className="flex-1"
+                >
+                  {isResolving ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2" size={20} />
+                      Resolving...
+                    </>
+                  ) : (
+                    'Confirm Resolution'
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
         )}
         
         {/* Participants List */}
