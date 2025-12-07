@@ -192,19 +192,37 @@ export default function DuelsPage() {
   }
 
   const formatTimeRemaining = (deadline: string) => {
-    const now = new Date()
-    const end = new Date(deadline)
-    const diff = end.getTime() - now.getTime()
+    try {
+      const now = new Date()
+      const end = new Date(deadline)
+      
+      // Validate date
+      if (isNaN(end.getTime())) {
+        return 'Invalid date'
+      }
+      
+      const diff = end.getTime() - now.getTime()
 
-    if (diff <= 0) return 'Ended'
+      if (diff <= 0) return 'Ended'
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
 
-    if (days > 0) return `${days}d ${hours}h`
-    if (hours > 0) return `${hours}h ${minutes}m`
-    return `${minutes}m`
+      // If more than 365 days, show years
+      if (days > 365) {
+        const years = Math.floor(days / 365)
+        const remainingDays = days % 365
+        return `${years}y ${remainingDays}d`
+      }
+
+      if (days > 0) return `${days}d ${hours}h`
+      if (hours > 0) return `${hours}h ${minutes}m`
+      return `${minutes}m`
+    } catch (error) {
+      console.error('Error formatting time remaining:', error)
+      return 'Invalid date'
+    }
   }
 
   const getCategoryColor = (category: string) => {
@@ -357,21 +375,58 @@ export default function DuelsPage() {
                     </div>
                   </div>
 
-                  {/* Prediction Stats */}
-                  <div className="flex gap-2 mb-4">
-                    <div className="flex-1 bg-success/20 rounded-lg p-2 text-center">
-                      <div className="text-xs text-white/60 mb-1">YES</div>
-                      <div className="font-bold text-success">
-                        {duel.yesCount}
+                  {/* Prediction Stats / Betting Buttons */}
+                  {authenticated && user?.id !== duel.creator.privyId && 
+                   (duel.status === 'active' || duel.status === 'pending') &&
+                   new Date(duel.deadline) > new Date() ? (
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => handleBet(duel.id, 'yes')}
+                        disabled={bettingDuelId === duel.id}
+                        className="flex-1 bg-success/20 hover:bg-success/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-success/30 hover:border-success/50"
+                      >
+                        <div className="text-xs text-white/60 mb-1">YES</div>
+                        <div className="font-bold text-success">
+                          {bettingDuelId === duel.id ? (
+                            <Loader2 className="animate-spin mx-auto" size={16} />
+                          ) : (
+                            duel.yesCount
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBet(duel.id, 'no')}
+                        disabled={bettingDuelId === duel.id}
+                        className="flex-1 bg-danger/20 hover:bg-danger/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-danger/30 hover:border-danger/50"
+                      >
+                        <div className="text-xs text-white/60 mb-1">NO</div>
+                        <div className="font-bold text-danger">
+                          {bettingDuelId === duel.id ? (
+                            <Loader2 className="animate-spin mx-auto" size={16} />
+                          ) : (
+                            duel.noCount
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 mb-4">
+                      <div className="flex-1 bg-success/20 rounded-lg p-2 text-center">
+                        <div className="text-xs text-white/60 mb-1">YES</div>
+                        <div className="font-bold text-success">
+                          {duel.yesCount}
+                        </div>
+                      </div>
+                      <div className="flex-1 bg-danger/20 rounded-lg p-2 text-center">
+                        <div className="text-xs text-white/60 mb-1">NO</div>
+                        <div className="font-bold text-danger">
+                          {duel.noCount}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex-1 bg-danger/20 rounded-lg p-2 text-center">
-                      <div className="text-xs text-white/60 mb-1">NO</div>
-                      <div className="font-bold text-danger">
-                        {duel.noCount}
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Error/Success Messages */}
                   {betError && bettingDuelId === duel.id && (
@@ -383,37 +438,6 @@ export default function DuelsPage() {
                   {betSuccess && bettingDuelId === duel.id && (
                     <div className="mb-3 p-2 bg-success/20 border border-success/30 rounded-lg text-success text-xs">
                       {betSuccess}
-                    </div>
-                  )}
-
-                  {/* Betting Buttons */}
-                  {authenticated && user?.id !== duel.creator.privyId && 
-                   (duel.status === 'active' || duel.status === 'pending') &&
-                   new Date(duel.deadline) > new Date() && (
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <Button
-                        className="h-14 text-lg font-bold bg-success hover:bg-green-600 text-white border-0"
-                        onClick={() => handleBet(duel.id, 'yes')}
-                        disabled={bettingDuelId === duel.id}
-                      >
-                        {bettingDuelId === duel.id ? (
-                          <Loader2 className="animate-spin" size={20} />
-                        ) : (
-                          'YES'
-                        )}
-                      </Button>
-                      
-                      <Button
-                        className="h-14 text-lg font-bold bg-danger hover:bg-red-600 text-white border-0"
-                        onClick={() => handleBet(duel.id, 'no')}
-                        disabled={bettingDuelId === duel.id}
-                      >
-                        {bettingDuelId === duel.id ? (
-                          <Loader2 className="animate-spin" size={20} />
-                        ) : (
-                          'NO'
-                        )}
-                      </Button>
                     </div>
                   )}
 

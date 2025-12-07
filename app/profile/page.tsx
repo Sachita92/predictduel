@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet } from 'lucide-react'
+import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet, MoreVertical, Trash2, X } from 'lucide-react'
 import { usePrivy } from '@privy-io/react-auth'
 import { useRouter } from 'next/navigation'
 import TopNav from '@/components/navigation/TopNav'
@@ -44,6 +44,9 @@ interface Activity {
   date: string
   status?: string
   category?: string
+  isCreator?: boolean
+  stake?: number
+  deadline?: string
 }
 
 interface CategoryStat {
@@ -70,6 +73,14 @@ export default function ProfilePage() {
   })
   const [nameError, setNameError] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  
+  // Edit/Delete duel states
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [editingDuel, setEditingDuel] = useState<Activity | null>(null)
+  const [deletingDuel, setDeletingDuel] = useState<Activity | null>(null)
+  const [duelEditForm, setDuelEditForm] = useState({ stake: 0, deadline: '' })
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
@@ -227,6 +238,66 @@ export default function ProfilePage() {
       console.error('Error updating profile:', error)
     }
   }, [editForm.name, editForm.username, editForm.bio, editForm.avatar, user?.id, fetchProfile])
+
+  const handleEditDuel = async () => {
+    if (!editingDuel || !user?.id) return
+    
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/duels/${editingDuel.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          stake: duelEditForm.stake,
+          deadline: duelEditForm.deadline,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(data.error || 'Failed to update duel')
+        return
+      }
+
+      setEditingDuel(null)
+      await fetchProfile()
+    } catch (error) {
+      console.error('Error updating duel:', error)
+      alert('Failed to update duel')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDeleteDuel = async () => {
+    if (!deletingDuel || !user?.id) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/duels/${deletingDuel.id}?privyId=${user.id}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(data.error || 'Failed to delete duel')
+        return
+      }
+
+      setDeletingDuel(null)
+      await fetchProfile()
+    } catch (error) {
+      console.error('Error deleting duel:', error)
+      alert('Failed to delete duel')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
 
   if (!ready || loading) {
@@ -567,10 +638,12 @@ export default function ProfilePage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/duel/${activity.id}`)}
+                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
                 >
-                  <div className="flex-1">
+                  <div 
+                    className="flex-1 cursor-pointer"
+                    onClick={() => router.push(`/duel/${activity.id}`)}
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="info" className="text-xs">
                         {activity.category || 'Other'}
@@ -584,25 +657,82 @@ export default function ProfilePage() {
                       {new Date(activity.date).toLocaleDateString()}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Badge 
-                      variant={
-                        activity.outcome === 'Won' ? 'success' : 
-                        activity.outcome === 'Lost' ? 'danger' :
-                        activity.outcome === 'Active' ? 'info' :
-                        'warning'
-                      }
-                    >
-                      {activity.outcome}
-                    </Badge>
-                    {(activity.outcome === 'Won' || activity.outcome === 'Lost') && (
-                      <div className={`text-sm mt-1 ${activity.outcome === 'Won' ? 'text-success' : 'text-danger'}`}>
-                        {activity.outcome === 'Won' ? '+' : '-'}{activity.amount.toFixed(2)} {currency}
-                      </div>
-                    )}
-                    {activity.outcome === 'Active' && (
-                      <div className="text-sm mt-1 text-white/60">
-                        Stake: {activity.amount.toFixed(2)} {currency}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <Badge 
+                        variant={
+                          activity.outcome === 'Won' ? 'success' : 
+                          activity.outcome === 'Lost' ? 'danger' :
+                          activity.outcome === 'Active' ? 'info' :
+                          'warning'
+                        }
+                      >
+                        {activity.outcome}
+                      </Badge>
+                      {(activity.outcome === 'Won' || activity.outcome === 'Lost') && (
+                        <div className={`text-sm mt-1 ${activity.outcome === 'Won' ? 'text-success' : 'text-danger'}`}>
+                          {activity.outcome === 'Won' ? '+' : '-'}{activity.amount.toFixed(2)} {currency}
+                        </div>
+                      )}
+                      {activity.outcome === 'Active' && (
+                        <div className="text-sm mt-1 text-white/60">
+                          Stake: {activity.amount.toFixed(2)} {currency}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Three-dot menu - only show if user is creator and duel is pending/active */}
+                    {activity.isCreator && (activity.status === 'pending' || activity.status === 'active') && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenMenuId(openMenuId === activity.id ? null : activity.id)
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                        >
+                          <MoreVertical size={18} className="text-white/60" />
+                        </button>
+                        
+                        {openMenuId === activity.id && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-40"
+                              onClick={() => setOpenMenuId(null)}
+                            />
+                            <div className="absolute right-0 top-full mt-2 bg-background-dark border border-white/10 rounded-lg shadow-lg z-50 min-w-[150px]">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditingDuel(activity)
+                                  setDuelEditForm({
+                                    stake: activity.stake || 0,
+                                    deadline: activity.deadline ? new Date(activity.deadline).toISOString().slice(0, 16) : ''
+                                  })
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-white/10 flex items-center gap-2 text-sm"
+                              >
+                                <Edit size={16} />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeletingDuel(activity)
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-white/10 flex items-center gap-2 text-sm text-danger"
+                              >
+                                <Trash2 size={16} />
+                                Delete
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -624,6 +754,144 @@ export default function ProfilePage() {
           )}
         </Card>
       </div>
+      
+      {/* Edit Duel Modal */}
+      {editingDuel && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold">Edit Duel</h3>
+              <button
+                onClick={() => setEditingDuel(null)}
+                className="text-white/60 hover:text-white transition-colors"
+                disabled={isSaving}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-white/70 text-sm mb-4">{editingDuel.prediction}</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Stake Amount ({currency})</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={duelEditForm.stake}
+                  onChange={(e) => setDuelEditForm({ ...duelEditForm, stake: parseFloat(e.target.value) || 0.01 })}
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none"
+                  disabled={isSaving}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Deadline</label>
+                <input
+                  type="datetime-local"
+                  value={duelEditForm.deadline}
+                  onChange={(e) => setDuelEditForm({ ...duelEditForm, deadline: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none"
+                  disabled={isSaving}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="secondary"
+                onClick={() => setEditingDuel(null)}
+                disabled={isSaving}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditDuel}
+                disabled={isSaving || !duelEditForm.stake || !duelEditForm.deadline}
+                className="flex-1"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={20} />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      
+      {/* Delete Duel Confirmation Modal */}
+      {deletingDuel && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold text-danger">Delete Duel</h3>
+              <button
+                onClick={() => setDeletingDuel(null)}
+                className="text-white/60 hover:text-white transition-colors"
+                disabled={isDeleting}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p className="text-white/70 mb-2">
+              Are you sure you want to delete this duel?
+            </p>
+            <p className="text-sm text-white/60 mb-6 font-semibold">
+              "{deletingDuel.prediction}"
+            </p>
+            <p className="text-sm text-warning mb-6">
+              ⚠️ This action cannot be undone. You can only delete duels with no participants.
+            </p>
+            
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingDuel(null)}
+                disabled={isDeleting}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDeleteDuel}
+                disabled={isDeleting}
+                variant="destructive"
+                className="flex-1"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={20} />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} className="mr-2" />
+                    Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
       
       <MobileNav />
     </div>

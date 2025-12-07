@@ -106,6 +106,9 @@ export async function GET(request: NextRequest) {
         createdAt: user.createdAt,
       },
       recentActivity: recentDuels.map((duel: any) => {
+        // Check if user is the creator
+        const isCreator = duel.creator._id.toString() === user._id.toString()
+        
         // Find the user's participation
         const userParticipation = duel.participants.find(
           (p: any) => p.user._id.toString() === user._id.toString()
@@ -130,6 +133,9 @@ export async function GET(request: NextRequest) {
           date: duel.updatedAt || duel.createdAt,
           status: duel.status,
           category: duel.category,
+          isCreator: isCreator,
+          stake: duel.stake,
+          deadline: duel.deadline,
         }
       }),
       categoryStats,
