@@ -20,6 +20,8 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
 
 3. **Get Duel by ID API** (`/api/duels/[id]`)
    - ✅ GET: Fetch individual duel details by ID
+   - ✅ PUT: Update duel (stake, deadline) - only creator, no participants
+   - ✅ DELETE: Delete duel - only creator, no participants
    - ✅ Returns: question, creator, participants, stakes, status, deadline, pool stats
    - ✅ Populates creator and participants from MongoDB
 
@@ -30,8 +32,22 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ Validates user, duel status, deadline
    - ✅ Prevents creator from betting on own duel
    - ✅ Handles duplicate participation (updates stake)
+   - ✅ Creates notification for duel creator when someone bets
 
-5. **Create Prediction API** (`/api/predictions/create`)
+5. **Resolve Duel API** (`/api/duels/[id]/resolve`)
+   - ✅ POST: Resolve duel with outcome (YES/NO)
+   - ✅ Only creator can resolve after deadline
+   - ✅ Calls Solana `resolveMarket()` on-chain
+   - ✅ Updates MongoDB status and outcome
+   - ✅ Calculates winners and payouts
+   - ✅ Updates user stats (wins, losses, win rate, streaks)
+
+6. **Notifications API** (`/api/notifications`)
+   - ✅ GET: Fetch user notifications
+   - ✅ PUT: Mark notification as read (single or all)
+   - ✅ Returns unread count
+
+7. **Create Prediction API** (`/api/predictions/create`)
    - ✅ POST: Create new duel/prediction in MongoDB
    - ✅ Handles on-chain market creation (stores marketPda and transaction signature)
 
@@ -58,6 +74,8 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ Displays all public duels
    - ✅ Category filtering
    - ✅ Real data from API
+   - ✅ Clickable YES/NO boxes for betting
+   - ✅ Improved time formatting (shows years for long deadlines)
 
 4. **Duel Detail Page** (`/duel/[id]`)
    - ✅ Connects to real API (`/api/duels/[id]`)
@@ -71,12 +89,30 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ Creator detection (prevents self-betting)
    - ✅ Solana betting integration (`placeBetOnChain`)
    - ✅ Real-time data refresh after betting
-   - ⚠️ Missing: Resolution UI (creator can't resolve yet)
+   - ✅ Resolution UI with modal (creator can resolve after deadline)
+   - ✅ Resolve functionality with Solana integration
    - ⚠️ Missing: Claim winnings UI
 
-5. **Login/Auth**
+5. **Profile Page** (`/profile`)
+   - ✅ Full profile display with stats
+   - ✅ Edit profile functionality
+   - ✅ Shows created questions
+   - ✅ Recent activity feed (shows created AND participated duels)
+   - ✅ Category statistics
+   - ✅ Edit/Delete duel functionality (three-dot menu)
+   - ✅ Edit duel modal (stake, deadline)
+   - ✅ Delete duel confirmation
+
+7. **Login/Auth**
    - ✅ Privy authentication integration
    - ✅ Wallet connection
+
+8. **Notification System**
+   - ✅ Notification dropdown with real data
+   - ✅ Unread count badge on bell icon
+   - ✅ Mark as read functionality
+   - ✅ Notification creation when someone bets on your duel
+   - ✅ Time formatting (e.g., "2m ago", "1h ago")
 
 ---
 
@@ -97,7 +133,9 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
 
 ### Components (May Need Work)
 1. **NotificationDropdown** (`components/notifications/NotificationDropdown.tsx`)
-   - ⚠️ Check if connected to real notification system
+   - ✅ Connected to real notification system
+   - ✅ Fetches from `/api/notifications`
+   - ✅ Mark as read functionality
 
 2. **SearchModal** (`components/search/SearchModal.tsx`)
    - ⚠️ Check if connected to search API
@@ -108,29 +146,21 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
 
 ### Critical Missing API Routes
 
-1. **Resolve Duel API** (`/api/duels/[id]/resolve`)
-   - ❌ **MISSING**: Allow creator to resolve duel
-   - Should:
-     - Call Solana `resolveMarket` on-chain
-     - Update MongoDB duel status to 'resolved'
-     - Set outcome (yes/no)
-     - Calculate winners
-
-2. **Claim Winnings API** (`/api/duels/[id]/claim`)
+1. **Claim Winnings API** (`/api/duels/[id]/claim`)
    - ❌ **MISSING**: Allow winners to claim their winnings
    - Should:
      - Call Solana `claimWinnings` on-chain
      - Update user stats (wins, totalEarned)
      - Update participant record
 
-3. **Leaderboard API** (`/api/leaderboard`)
+2. **Leaderboard API** (`/api/leaderboard`)
    - ❌ **MISSING**: Fetch top users by various metrics
    - Should support:
      - Time filters (today, week, all-time)
      - Sorting (wins, win rate, total earned, streak)
      - Pagination
 
-4. **Feed API** (`/api/feed`)
+3. **Feed API** (`/api/feed`)
    - ❌ **MISSING**: Personalized feed of duels
    - Could include:
      - Recommended duels
@@ -138,16 +168,10 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
      - Trending duels
      - User's active duels
 
-5. **Search API** (`/api/search`)
+4. **Search API** (`/api/search`)
    - ❌ **MISSING**: Search duels by question, category, creator
    - Should support text search on question field
 
-6. **Notifications API** (`/api/notifications`)
-   - ⚠️ **UNCLEAR**: Check if implemented
-   - Should handle:
-     - Duel invitations
-     - Resolution notifications
-     - Win/loss notifications
 
 ---
 
@@ -177,8 +201,10 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ Handles wallet connection (Phantom, Solflare, etc.)
 
 3. **Resolving on Solana**
-   - ❌ No frontend call to `resolveMarket()` SDK method
-   - ❌ No API route that calls Solana `resolveMarket`
+   - ✅ Frontend calls `resolveMarketOnChain()` helper function
+   - ✅ Duel detail page has resolve button and modal
+   - ✅ API route calls Solana `resolveMarket()`
+   - ✅ Updates MongoDB after on-chain transaction
 
 4. **Claiming Winnings on Solana**
    - ❌ No frontend call to `claimWinnings()` SDK method
@@ -190,14 +216,7 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
 
 ### High Priority (Core Functionality)
 
-1. **Implement Resolution Flow**
-   - Create `/api/duels/[id]/resolve/route.ts`
-   - Only allow creator to resolve
-   - Call Solana `resolveMarket()`
-   - Update MongoDB status and outcome
-   - Calculate and update winner stats
-
-2. **Implement Claim Winnings**
+1. **Implement Claim Winnings**
    - Create `/api/duels/[id]/claim/route.ts`
    - Call Solana `claimWinnings()`
    - Update user stats
@@ -229,9 +248,9 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - Update pool sizes, participant counts
 
 7. **Notifications System**
-    - Implement notification creation
-    - Connect to notification dropdown
-    - Real-time notification delivery
+    - ✅ Implement notification creation
+    - ✅ Connect to notification dropdown
+    - ⚠️ Real-time notification delivery (currently requires refresh)
 
 8. **Friend Challenges**
     - Implement friend duel flow
@@ -280,7 +299,6 @@ Before deploying to production:
 - Leaderboard page (mock data)
 
 **Missing Backend APIs:**
-- Resolve duel
 - Claim winnings
 - Leaderboard
 - Feed
@@ -289,12 +307,20 @@ Before deploying to production:
 **Solana Integration:**
 - ✅ Market creation works
 - ✅ Betting connected (via `placeBetOnChain`)
-- ❌ Resolution not connected
+- ✅ Resolution connected (via `resolveMarketOnChain`)
 - ❌ Claiming not connected
-- ⚠️ Wallet adapter needs work (but betting works with window.solana)
+- ⚠️ Wallet adapter needs work (but betting/resolving works with window.solana)
+
+**Recent Completions:**
+- ✅ Resolve duel functionality (API + UI)
+- ✅ Edit/Delete duel functionality
+- ✅ Notification system (bet notifications)
+- ✅ Profile shows created duels
+- ✅ Improved time formatting
 
 **Estimated Completion:**
 - Core betting flow: ✅ **COMPLETED**
-- Resolution & claiming: ~1-2 days
-- All features: ~1 week
+- Resolution: ✅ **COMPLETED**
+- Claiming: ~1 day
+- All features: ~3-5 days
 

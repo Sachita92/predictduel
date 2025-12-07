@@ -16,6 +16,7 @@ export interface IDuel extends Document {
     stake: number
     won: boolean
     payout?: number
+    claimed?: boolean
   }[]
   poolSize: number // Total amount in pool (in native currency)
   yesCount: number
@@ -110,6 +111,10 @@ const DuelSchema: Schema = new Schema(
         },
         payout: {
           type: Number,
+        },
+        claimed: {
+          type: Boolean,
+          default: false,
         },
       },
     ],

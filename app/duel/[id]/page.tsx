@@ -15,6 +15,7 @@ import { getWalletAddress } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
 import { resolveMarketOnChain } from '@/lib/solana-resolve'
+import { claimWinningsOnChain } from '@/lib/solana-claim'
 import { X } from 'lucide-react'
 
 interface Duel {
@@ -47,6 +48,7 @@ interface Duel {
     stake: number
     won: boolean | null
     payout: number | null
+    claimed?: boolean
   }>
   marketPda: string | null
   createdAt: string
@@ -71,6 +73,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [resolveSuccess, setResolveSuccess] = useState(false)
   const [showResolveModal, setShowResolveModal] = useState(false)
   const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no' | null>(null)
+  
+  // Claim winnings state
+  const [isClaiming, setIsClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | null>(null)
+  const [claimSuccess, setClaimSuccess] = useState(false)
   
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
@@ -357,6 +364,107 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
   
+  const handleClaim = async () => {
+    if (!duel || !user || !walletAddress) {
+      setClaimError('Please connect your wallet')
+      return
+    }
+    
+    if (!duel.marketPda) {
+      setClaimError('This duel is not connected to Solana. Please contact support.')
+      return
+    }
+    
+    if (!userParticipation || !userParticipation.won) {
+      setClaimError('You did not win this duel')
+      return
+    }
+    
+    if (userParticipation.claimed) {
+      setClaimError('Winnings have already been claimed')
+      return
+    }
+    
+    setIsClaiming(true)
+    setClaimError(null)
+    setClaimSuccess(false)
+    
+    try {
+      // Step 1: Get Solana wallet provider
+      let solanaProvider: any = null
+      
+      // Try window.solana first (Phantom, Solflare, etc.)
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      // If window.solana not available, try Privy wallets
+      if (!solanaProvider && wallets.length > 0) {
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Step 2: Claim winnings on-chain
+      const onChainResult = await claimWinningsOnChain(solanaProvider, {
+        marketPda: duel.marketPda,
+      })
+      
+      // Step 3: Update MongoDB
+      const response = await fetch(`/api/duels/${id}/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          transactionSignature: onChainResult.signature,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to claim winnings')
+      }
+      
+      setClaimSuccess(true)
+      
+      // Refresh duel data
+      setTimeout(() => {
+        fetchDuel()
+        setClaimSuccess(false)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Error claiming winnings:', error)
+      setClaimError(error instanceof Error ? error.message : 'Failed to claim winnings')
+    } finally {
+      setIsClaiming(false)
+    }
+  }
+  
   if (!ready || isLoading) {
     return (
       <div className="min-h-screen bg-background-dark">
@@ -548,19 +656,65 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         {hasParticipated && userParticipation && (
           <Card variant="glass" className="p-6 mb-6">
             <h3 className="text-xl font-bold mb-4">Your Bet</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-2xl font-bold mb-1">
-                  {userParticipation.prediction.toUpperCase()}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold mb-1">
+                    {userParticipation.prediction.toUpperCase()}
+                  </div>
+                  <div className="text-white/60">
+                    Stake: {userParticipation.stake.toFixed(2)} {currency}
+                  </div>
+                  {duel.status === 'resolved' && userParticipation.won && userParticipation.payout && (
+                    <div className="text-success font-semibold mt-2">
+                      Payout: {userParticipation.payout.toFixed(2)} {currency}
+                    </div>
+                  )}
                 </div>
-                <div className="text-white/60">
-                  Stake: {userParticipation.stake.toFixed(2)} {currency}
-                </div>
+                {duel.status === 'resolved' && (
+                  <Badge variant={userParticipation.won ? 'success' : 'danger'}>
+                    {userParticipation.won ? 'Won' : 'Lost'}
+                  </Badge>
+                )}
               </div>
-              {duel.status === 'resolved' && (
-                <Badge variant={userParticipation.won ? 'success' : 'danger'}>
-                  {userParticipation.won ? 'Won' : 'Lost'}
-                </Badge>
+              
+              {/* Claim Winnings Button */}
+              {duel.status === 'resolved' && userParticipation.won && userParticipation.payout && userParticipation.payout > 0 && (
+                <div>
+                  {claimError && (
+                    <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                      {claimError}
+                    </div>
+                  )}
+                  
+                  {claimSuccess && (
+                    <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm">
+                      ✓ Winnings claimed successfully! Refreshing...
+                    </div>
+                  )}
+                  
+                  {userParticipation.claimed ? (
+                    <div className="p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm text-center">
+                      ✓ Winnings Claimed
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleClaim}
+                      disabled={isClaiming}
+                      className="w-full"
+                      variant="success"
+                    >
+                      {isClaiming ? (
+                        <>
+                          <Loader2 className="animate-spin mr-2" size={20} />
+                          Claiming...
+                        </>
+                      ) : (
+                        `Claim ${userParticipation.payout.toFixed(2)} ${currency}`
+                      )}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </Card>
