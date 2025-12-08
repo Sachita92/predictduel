@@ -206,17 +206,30 @@ pub mod predict_duel {
         // Use u128 to prevent overflow
         let payout = ((participant.stake as u128)
             .checked_mul(market.pool_size as u128)
-            .unwrap()
+            .ok_or(PredictDuelError::MarketNotActive)?
             .checked_div(winning_pool_stake as u128)
-            .unwrap()) as u64;
+            .ok_or(PredictDuelError::MarketNotActive)?) as u64;
+        
+        // Validate payout is positive
+        require!(
+            payout > 0,
+            PredictDuelError::MarketNotActive
+        );
+        
+        // Ensure vault has sufficient balance (account for rent exemption)
+        let vault_balance = ctx.accounts.market_vault.lamports();
+        require!(
+            vault_balance >= payout,
+            PredictDuelError::MarketNotActive
+        );
 
         // Transfer winnings from vault to winner
-        // Use the vault's bump stored in market account
+        // Use the vault's bump that Anchor validated (more reliable than stored value)
         let seeds = &[
             b"market_vault",
             market.creator.as_ref(),
             &market.market_index.to_le_bytes(),
-            &[market.vault_bump],
+            &[ctx.bumps.market_vault],
         ];
         let signer = &[&seeds[..]];
 
@@ -283,12 +296,12 @@ pub mod predict_duel {
         let refund_amount = participant.stake;
 
         // Transfer refund from vault to participant
-        // Use the vault's bump stored in market account
+        // Use the vault's bump that Anchor validated (more reliable than stored value)
         let seeds = &[
             b"market_vault",
             market.creator.as_ref(),
             &market.market_index.to_le_bytes(),
-            &[market.vault_bump],
+            &[ctx.bumps.market_vault],
         ];
         let signer = &[&seeds[..]];
 
@@ -335,19 +348,19 @@ pub struct CreateMarket<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
     
-    /// CHECK: This is the vault that holds all stakes
+    /// System account vault that holds all stakes - no data, just lamports
     #[account(
         init,
         payer = creator,
+        space = 0,
         seeds = [
             b"market_vault",
             creator.key().as_ref(),
             &market_index.to_le_bytes()
         ],
-        bump,
-        space = 8 // Minimum space for a system account
+        bump
     )]
-    pub market_vault: AccountInfo<'info>,
+    pub market_vault: SystemAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -369,7 +382,7 @@ pub struct PlaceBet<'info> {
     #[account(mut)]
     pub bettor: Signer<'info>,
     
-    /// CHECK: This is the vault that holds all stakes
+    /// System account vault that holds all stakes
     #[account(
         mut,
         seeds = [
@@ -379,7 +392,7 @@ pub struct PlaceBet<'info> {
         ],
         bump
     )]
-    pub market_vault: AccountInfo<'info>,
+    pub market_vault: SystemAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -407,7 +420,7 @@ pub struct ClaimWinnings<'info> {
     #[account(mut)]
     pub winner: Signer<'info>,
     
-    /// CHECK: This is the vault that holds all stakes
+    /// System account vault that holds all stakes
     #[account(
         mut,
         seeds = [
@@ -417,7 +430,7 @@ pub struct ClaimWinnings<'info> {
         ],
         bump
     )]
-    pub market_vault: AccountInfo<'info>,
+    pub market_vault: SystemAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -445,7 +458,7 @@ pub struct RefundStake<'info> {
     #[account(mut)]
     pub bettor: Signer<'info>,
     
-    /// CHECK: This is the vault that holds all stakes
+    /// System account vault that holds all stakes
     #[account(
         mut,
         seeds = [
@@ -455,7 +468,7 @@ pub struct RefundStake<'info> {
         ],
         bump
     )]
-    pub market_vault: AccountInfo<'info>,
+    pub market_vault: SystemAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
