@@ -349,6 +349,7 @@ pub struct CreateMarket<'info> {
     pub creator: Signer<'info>,
     
     /// System account vault that holds all stakes - no data, just lamports
+    /// CHECK: PDA validated via seeds, owner checked to be system program
     #[account(
         init,
         payer = creator,
@@ -384,6 +385,7 @@ pub struct PlaceBet<'info> {
     pub bettor: Signer<'info>,
     
     /// System account vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owner checked to be system program
     #[account(
         mut,
         seeds = [
@@ -423,6 +425,7 @@ pub struct ClaimWinnings<'info> {
     pub winner: Signer<'info>,
     
     /// System account vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owner checked to be system program
     #[account(
         mut,
         seeds = [
@@ -462,6 +465,7 @@ pub struct RefundStake<'info> {
     pub bettor: Signer<'info>,
     
     /// System account vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owner checked to be system program
     #[account(
         mut,
         seeds = [
