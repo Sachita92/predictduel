@@ -19,6 +19,16 @@ build: ## Build the Solana program
 	anchor build
 	@echo "✅ Build complete"
 
+build-docker: ## Build the Solana program using Docker (for incompatible Rust versions)
+	@echo "🐳 Building program in Docker..."
+	@chmod +x docker-build.sh
+	@./docker-build.sh
+	@echo "✅ Build complete"
+
+docker-shell: ## Open a shell in the Docker container
+	@echo "🐳 Opening Docker shell..."
+	docker-compose run --rm anchor-builder /bin/bash
+
 test: ## Run tests
 	@echo "🧪 Running tests..."
 	anchor test

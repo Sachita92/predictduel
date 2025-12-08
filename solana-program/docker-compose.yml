@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  anchor-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: predictduel-anchor-builder:latest
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - CARGO_HOME=/usr/local/cargo
+    command: /bin/bash
+
+volumes:
+  cargo-cache:
+  target-cache:
+
