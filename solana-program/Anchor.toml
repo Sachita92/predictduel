@@ -3,13 +3,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-predict_duel = "4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY"
+predict_duel = "8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe"
 
 [programs.devnet]
-predict_duel = "4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY"
+predict_duel = "8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe"
 
 [programs.mainnet]
-predict_duel = "4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY"
+predict_duel = "8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe"
 
 [registry]
 url = "https://api.apr.dev"
