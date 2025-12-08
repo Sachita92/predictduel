@@ -21,6 +21,7 @@ interface Duel {
   stake: number
   deadline: string
   status: string
+  outcome?: string | null
   poolSize: number
   yesCount: number
   noCount: number
@@ -46,6 +47,7 @@ export default function DuelsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const [selectedStatus, setSelectedStatus] = useState<string>('active') // active, resolved, all
   const [bettingDuelId, setBettingDuelId] = useState<string | null>(null)
   const [bettingPrediction, setBettingPrediction] = useState<'yes' | 'no' | null>(null)
   const [betError, setBetError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export default function DuelsPage() {
 
   useEffect(() => {
     fetchDuels()
-  }, [selectedCategory])
+  }, [selectedCategory, selectedStatus])
 
   const fetchDuels = async () => {
     setIsLoading(true)
@@ -64,7 +66,7 @@ export default function DuelsPage() {
     
     try {
       const categoryParam = selectedCategory === 'All' ? '' : selectedCategory
-      const url = `/api/duels?status=active${categoryParam ? `&category=${categoryParam}` : ''}`
+      const url = `/api/duels?status=${selectedStatus}${categoryParam ? `&category=${categoryParam}` : ''}`
       
       const response = await fetch(url)
       const data = await response.json()
@@ -248,11 +250,52 @@ export default function DuelsPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 font-display gradient-text">
-            Active Duels
+            {selectedStatus === 'active' ? 'Active Duels' : selectedStatus === 'resolved' ? 'Completed Duels' : 'All Duels'}
           </h1>
           <p className="text-white/70">
-            Browse and predict on duels created by other users
+            {selectedStatus === 'active' 
+              ? 'Browse and predict on duels created by other users'
+              : selectedStatus === 'resolved'
+              ? 'View completed duels and their outcomes'
+              : 'Browse all duels - active and completed'}
           </p>
+        </div>
+
+        {/* Status Filter */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('active')}
+            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
+              selectedStatus === 'active'
+                ? 'gradient-primary text-white'
+                : 'bg-white/5 hover:bg-white/10 text-white/70'
+            }`}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('resolved')}
+            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
+              selectedStatus === 'resolved'
+                ? 'gradient-primary text-white'
+                : 'bg-white/5 hover:bg-white/10 text-white/70'
+            }`}
+          >
+            Completed
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('all')}
+            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
+              selectedStatus === 'all'
+                ? 'gradient-primary text-white'
+                : 'bg-white/5 hover:bg-white/10 text-white/70'
+            }`}
+          >
+            All
+          </button>
         </div>
 
         {/* Category Filter */}
@@ -297,13 +340,25 @@ export default function DuelsPage() {
         {!isLoading && !error && duels.length === 0 && (
           <Card variant="glass" className="p-12 text-center">
             <div className="text-6xl mb-4">🔮</div>
-            <h2 className="text-2xl font-bold mb-2">No Active Duels</h2>
+            <h2 className="text-2xl font-bold mb-2">
+              {selectedStatus === 'active' 
+                ? 'No Active Duels'
+                : selectedStatus === 'resolved'
+                ? 'No Completed Duels'
+                : 'No Duels Found'}
+            </h2>
             <p className="text-white/60 mb-6">
-              There are no active duels in this category right now.
+              {selectedStatus === 'active'
+                ? 'There are no active duels in this category right now.'
+                : selectedStatus === 'resolved'
+                ? 'No duels have been completed yet in this category.'
+                : 'No duels found matching your filters.'}
             </p>
-            <Button onClick={() => router.push('/create')} glow>
-              Create the First Duel
-            </Button>
+            {selectedStatus === 'active' && (
+              <Button onClick={() => router.push('/create')} glow>
+                Create the First Duel
+              </Button>
+            )}
           </Card>
         )}
 
@@ -323,11 +378,21 @@ export default function DuelsPage() {
                     <Badge className={getCategoryColor(duel.category)}>
                       {duel.category}
                     </Badge>
-                    <Badge
-                      variant={duel.status === 'active' ? 'success' : 'info'}
-                    >
-                      {duel.status}
-                    </Badge>
+                    <div className="flex gap-2">
+                      {duel.status === 'resolved' && duel.outcome && (
+                        <Badge
+                          variant={duel.outcome === 'yes' ? 'success' : 'danger'}
+                          className="text-xs"
+                        >
+                          {duel.outcome.toUpperCase()}
+                        </Badge>
+                      )}
+                      <Badge
+                        variant={duel.status === 'active' ? 'success' : duel.status === 'resolved' ? 'info' : 'default'}
+                      >
+                        {duel.status}
+                      </Badge>
+                    </div>
                   </div>
 
                   {/* Creator */}
@@ -350,10 +415,14 @@ export default function DuelsPage() {
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2 text-white/60">
                         <Clock size={14} />
-                        <span>Time Left</span>
+                        <span>{duel.status === 'resolved' ? 'Completed' : 'Time Left'}</span>
                       </div>
                       <span className="font-semibold">
-                        {formatTimeRemaining(duel.deadline)}
+                        {duel.status === 'resolved' 
+                          ? new Date(duel.deadline) < new Date() 
+                            ? 'Ended' 
+                            : formatTimeRemaining(duel.deadline)
+                          : formatTimeRemaining(duel.deadline)}
                       </span>
                     </div>
 
@@ -377,6 +446,21 @@ export default function DuelsPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Winners Section for Resolved Duels */}
+                  {duel.status === 'resolved' && duel.outcome && (
+                    <div className="mb-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-white/80">Outcome</span>
+                        <Badge variant={duel.outcome === 'yes' ? 'success' : 'danger'}>
+                          {duel.outcome.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-white/60 mt-2">
+                        Total Pool: <span className="font-semibold text-white">{duel.poolSize.toFixed(2)} SOL</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Prediction Stats / Betting Buttons */}
                   {authenticated && user?.id !== duel.creator.privyId && 

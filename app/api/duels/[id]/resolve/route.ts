@@ -200,7 +200,7 @@ export async function POST(
             user: participant.user,
             type: 'win',
             title: 'You Won! 🎉',
-            message: `You won ${payout.toFixed(2)} SOL in "${duel.question}"! The outcome was ${finalOutcome.toUpperCase()}.`,
+            message: `You won ${payout.toFixed(2)} SOL from a pool of ${duel.poolSize.toFixed(2)} SOL in "${duel.question}"! The outcome was ${finalOutcome.toUpperCase()}.`,
             read: false,
             actionUrl: `/duel/${duelId}`,
             relatedPrediction: duel._id,
@@ -210,7 +210,7 @@ export async function POST(
             user: participant.user,
             type: 'system',
             title: 'Duel Resolved',
-            message: `The duel "${duel.question}" has been resolved. The outcome was ${finalOutcome.toUpperCase()}. Better luck next time!`,
+            message: `The duel "${duel.question}" has been resolved. Total pool was ${duel.poolSize.toFixed(2)} SOL. The outcome was ${finalOutcome.toUpperCase()}. Better luck next time!`,
             read: false,
             actionUrl: `/duel/${duelId}`,
             relatedPrediction: duel._id,
@@ -221,11 +221,12 @@ export async function POST(
       // Also notify the creator that their duel was resolved
       const creatorUser = await User.findById(duel.creator)
       if (creatorUser) {
+        const winnersCount = duel.participants.filter((p: any) => p.won).length
         await Notification.create({
           user: duel.creator,
           type: 'duel_resolved',
           title: 'Your Duel Has Been Resolved',
-          message: `Your duel "${duel.question}" has been resolved. The outcome was ${finalOutcome.toUpperCase()}.`,
+          message: `Your duel "${duel.question}" has been resolved. Total pool: ${duel.poolSize.toFixed(2)} SOL. Outcome: ${finalOutcome.toUpperCase()}. ${winnersCount} winner${winnersCount !== 1 ? 's' : ''} won.`,
           read: false,
           actionUrl: `/duel/${duelId}`,
           relatedPrediction: duel._id,

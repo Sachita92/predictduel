@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
         // Active means pending or active status, and deadline hasn't passed
         query.status = { $in: ['pending', 'active'] }
         query.deadline = { $gt: new Date() }
+      } else if (status === 'resolved') {
+        // Resolved duels - show completed duels
+        query.status = 'resolved'
       } else {
         query.status = status
       }
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
       stake: duel.stake,
       deadline: duel.deadline,
       status: duel.status,
+      outcome: duel.outcome || null,
       poolSize: duel.poolSize,
       yesCount: duel.yesCount,
       noCount: duel.noCount,

@@ -720,6 +720,71 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
         
+        {/* Winners Section for Resolved Duels */}
+        {duel?.status === 'resolved' && duel?.outcome && (
+          <Card variant="glass" className="p-6 mb-6">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <span>🏆 Winners</span>
+              <Badge variant={duel.outcome === 'yes' ? 'success' : 'danger'}>
+                Outcome: {duel.outcome.toUpperCase()}
+              </Badge>
+            </h3>
+            
+            <div className="mb-4 p-4 bg-white/5 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-white/60">Total Pool</span>
+                <span className="text-2xl font-bold gradient-text">
+                  {duel.poolSize.toFixed(2)} {currency}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Winners</span>
+                <span className="font-semibold text-success">
+                  {duel.participants.filter((p: any) => p.won).length} participant{duel.participants.filter((p: any) => p.won).length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+
+            {duel.participants.filter((p: any) => p.won).length > 0 ? (
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-white/80 mb-2">Winner Details:</div>
+                {duel.participants
+                  .filter((p: any) => p.won)
+                  .map((participant: any, index: number) => (
+                    <div
+                      key={participant.id || index}
+                      className="p-3 bg-success/10 border border-success/20 rounded-lg flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold">
+                          {participant.user?.username?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <div>
+                          <div className="font-semibold">@{participant.user?.username || 'Unknown'}</div>
+                          <div className="text-xs text-white/60">
+                            Stake: {participant.stake.toFixed(2)} {currency}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-success">
+                          {participant.payout?.toFixed(2) || '0.00'} {currency}
+                        </div>
+                        <div className="text-xs text-white/60">
+                          {participant.claimed ? '✓ Claimed' : 'Pending'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-white/60">
+                No winners in this duel
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Creator Notice & Resolve Section */}
         {isCreator && (
           <Card variant="glass" className="p-6 mb-6">
