@@ -1,7 +1,7 @@
 # Dockerfile for building Anchor 0.32.1 Solana program
-# Uses Rust 1.70+ which is compatible with Anchor 0.32.1
+# Uses Rust 1.90+ which is required for Anchor 0.32.1 dependencies
 
-FROM rust:1.75-slim as builder
+FROM rust:1.90-slim as builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -39,7 +39,7 @@ COPY programs ./programs
 RUN anchor build
 
 # Final stage - just keep the built artifacts
-FROM rust:1.75-slim
+FROM rust:1.90-slim
 
 # Install Solana CLI for deployment
 RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
