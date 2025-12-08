@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, TrendingUp, Users, Zap, Clock } from 'lucide-react'
+import { Search, X, TrendingUp, Users, Zap, Clock, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 
@@ -11,32 +12,117 @@ interface SearchModalProps {
   onClose: () => void
 }
 
-const recentSearches = [
-  'BTC price prediction',
-  'Weather in Kathmandu',
-  'SOL to $200',
-]
+interface DuelResult {
+  id: string
+  question: string
+  category: string
+  participants: number
+  poolSize: number
+  creator: {
+    username: string
+  }
+}
 
-const trendingPredictions = [
-  { id: '1', question: 'Will BTC hit $100K this week?', category: 'Crypto', participants: 234 },
-  { id: '2', question: 'Will it rain tomorrow?', category: 'Weather', participants: 89 },
-  { id: '3', question: 'Will SOL reach $200?', category: 'Crypto', participants: 156 },
-]
+const RECENT_SEARCHES_KEY = 'predictduel_recent_searches'
+const MAX_RECENT_SEARCHES = 5
 
 export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
-  const [results, setResults] = useState<typeof trendingPredictions>([])
+  const [results, setResults] = useState<DuelResult[]>([])
+  const [trendingDuels, setTrendingDuels] = useState<DuelResult[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Load recent searches from localStorage
   useEffect(() => {
-    if (searchQuery.trim()) {
-      // Simulate search results
-      const filtered = trendingPredictions.filter(prediction =>
-        prediction.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prediction.category.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-      setResults(filtered)
-    } else {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(RECENT_SEARCHES_KEY)
+      if (stored) {
+        try {
+          setRecentSearches(JSON.parse(stored))
+        } catch (e) {
+          console.error('Error loading recent searches:', e)
+        }
+      }
+    }
+  }, [])
+
+  // Load trending duels when modal opens
+  useEffect(() => {
+    if (isOpen && !searchQuery.trim()) {
+      fetchTrendingDuels()
+    }
+  }, [isOpen, searchQuery])
+
+  const fetchTrendingDuels = async () => {
+    try {
+      const response = await fetch('/api/duels?status=active&limit=5')
+      const data = await response.json()
+      if (data.success && data.duels) {
+        setTrendingDuels(data.duels.map((duel: any) => ({
+          id: duel.id,
+          question: duel.question,
+          category: duel.category,
+          participants: duel.participants,
+          poolSize: duel.poolSize,
+          creator: {
+            username: duel.creator.username,
+          },
+        })))
+      }
+    } catch (error) {
+      console.error('Error fetching trending duels:', error)
+    }
+  }
+
+  // Search with debounce
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    if (!searchQuery.trim()) {
       setResults([])
+      return
+    }
+
+    setIsLoading(true)
+
+    // Debounce search by 300ms
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/duels?status=active&search=${encodeURIComponent(searchQuery)}&limit=20`)
+        const data = await response.json()
+        
+        if (data.success && data.duels) {
+          setResults(data.duels.map((duel: any) => ({
+            id: duel.id,
+            question: duel.question,
+            category: duel.category,
+            participants: duel.participants,
+            poolSize: duel.poolSize,
+            creator: {
+              username: duel.creator.username,
+            },
+          })))
+        } else {
+          setResults([])
+        }
+      } catch (error) {
+        console.error('Error searching duels:', error)
+        setResults([])
+      } finally {
+        setIsLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
     }
   }, [searchQuery])
 
@@ -45,11 +131,38 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
+      // Reset search when closing
+      setSearchQuery('')
+      setResults([])
     }
     return () => {
       document.body.style.overflow = 'unset'
     }
   }, [isOpen])
+
+  const handleSearchClick = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  const handleResultClick = (duelId: string) => {
+    // Save to recent searches
+    if (searchQuery.trim()) {
+      const updated = [searchQuery, ...recentSearches.filter(s => s !== searchQuery)]
+        .slice(0, MAX_RECENT_SEARCHES)
+      setRecentSearches(updated)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated))
+      }
+    }
+    
+    onClose()
+    router.push(`/duel/${duelId}`)
+  }
+
+  const handleTrendingClick = (duelId: string) => {
+    onClose()
+    router.push(`/duel/${duelId}`)
+  }
 
   if (!isOpen) return null
 
@@ -68,6 +181,7 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
           initial={{ opacity: 0, y: -20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          onClick={(e) => e.stopPropagation()}
           className="relative z-10 w-full max-w-2xl"
         >
           <Card variant="glass" className="p-6">
@@ -94,24 +208,35 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
             {/* Search Results or Suggestions */}
             {searchQuery.trim() ? (
-              results.length > 0 ? (
+              isLoading ? (
+                <div className="text-center py-12 text-white/60">
+                  <Loader2 className="mx-auto mb-4 animate-spin" size={48} />
+                  <p>Searching...</p>
+                </div>
+              ) : results.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-sm text-white/60 mb-2">Search Results</div>
+                  <div className="text-sm text-white/60 mb-2">
+                    Found {results.length} result{results.length !== 1 ? 's' : ''}
+                  </div>
                   {results.map((result) => (
                     <motion.div
                       key={result.id}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
+                      onClick={() => handleResultClick(result.id)}
                       className="p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <h3 className="font-semibold mb-1">{result.question}</h3>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="info">{result.category}</Badge>
                             <span className="text-xs text-white/60 flex items-center gap-1">
                               <Users size={12} />
-                              {result.participants} participants
+                              {result.participants} participant{result.participants !== 1 ? 's' : ''}
+                            </span>
+                            <span className="text-xs text-white/60">
+                              by @{result.creator.username}
                             </span>
                           </div>
                         </div>
@@ -123,6 +248,7 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 <div className="text-center py-12 text-white/60">
                   <Search size={48} className="mx-auto mb-4 opacity-50" />
                   <p>No results found for "{searchQuery}"</p>
+                  <p className="text-sm mt-2">Try searching for a different keyword</p>
                 </div>
               )
             ) : (
@@ -134,46 +260,61 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     Recent Searches
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {recentSearches.map((search, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setSearchQuery(search)}
-                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors"
-                      >
-                        {search}
-                      </button>
-                    ))}
+                    {recentSearches.length > 0 ? (
+                      recentSearches.map((search, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSearchClick(search)}
+                          className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors"
+                        >
+                          {search}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-sm text-white/40">No recent searches</p>
+                    )}
                   </div>
                 </div>
 
-                {/* Trending Predictions */}
+                {/* Trending Duels */}
                 <div>
                   <div className="text-sm text-white/60 mb-3 flex items-center gap-2">
                     <TrendingUp size={16} />
-                    Trending Predictions
+                    Trending Duels
                   </div>
                   <div className="space-y-2">
-                    {trendingPredictions.map((prediction) => (
-                      <motion.div
-                        key={prediction.id}
-                        whileHover={{ scale: 1.02 }}
-                        className="p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold mb-2">{prediction.question}</h3>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="info">{prediction.category}</Badge>
-                              <span className="text-xs text-white/60 flex items-center gap-1">
-                                <Users size={12} />
-                                {prediction.participants} participants
-                              </span>
+                    {trendingDuels.length > 0 ? (
+                      trendingDuels.map((duel) => (
+                        <motion.div
+                          key={duel.id}
+                          whileHover={{ scale: 1.02 }}
+                          onClick={() => handleTrendingClick(duel.id)}
+                          className="p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-semibold mb-2">{duel.question}</h3>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="info">{duel.category}</Badge>
+                                <span className="text-xs text-white/60 flex items-center gap-1">
+                                  <Users size={12} />
+                                  {duel.participants} participant{duel.participants !== 1 ? 's' : ''}
+                                </span>
+                                <span className="text-xs text-white/60">
+                                  {duel.poolSize.toFixed(2)} SOL
+                                </span>
+                              </div>
                             </div>
+                            <Zap className="text-accent" size={20} />
                           </div>
-                          <Zap className="text-accent" size={20} />
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-white/40">
+                        <Loader2 className="mx-auto mb-2 animate-spin" size={24} />
+                        <p className="text-sm">Loading trending duels...</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

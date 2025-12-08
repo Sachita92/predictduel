@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export interface INotification extends Document {
   user: mongoose.Types.ObjectId // User who receives the notification
-  type: 'win' | 'challenge' | 'reminder' | 'achievement' | 'system' | 'bet'
+  type: 'win' | 'challenge' | 'reminder' | 'achievement' | 'system' | 'bet' | 'duel_created' | 'duel_resolved'
   title: string
   message: string
   read: boolean
@@ -23,7 +23,7 @@ const NotificationSchema: Schema = new Schema(
     },
     type: {
       type: String,
-      enum: ['win', 'challenge', 'reminder', 'achievement', 'system', 'bet'],
+      enum: ['win', 'challenge', 'reminder', 'achievement', 'system', 'bet', 'duel_created', 'duel_resolved'],
       required: true,
     },
     title: {

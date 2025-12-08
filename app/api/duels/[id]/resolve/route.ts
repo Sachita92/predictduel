@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
+import Notification from '@/models/Notification'
 
 /**
  * API Route to Resolve a Duel
@@ -183,6 +184,63 @@ export async function POST(
     })
 
     await Promise.all(userUpdatePromises)
+
+    // Create notifications for all participants about the duel resolution
+    try {
+      const notificationPromises = duel.participants.map(async (participant: any) => {
+        const participantUser = await User.findById(participant.user)
+        if (!participantUser) return
+
+        const won = participant.won
+        const payout = participant.payout || 0
+
+        // Create notification based on win/loss
+        if (won) {
+          await Notification.create({
+            user: participant.user,
+            type: 'win',
+            title: 'You Won! 🎉',
+            message: `You won ${payout.toFixed(2)} SOL in "${duel.question}"! The outcome was ${finalOutcome.toUpperCase()}.`,
+            read: false,
+            actionUrl: `/duel/${duelId}`,
+            relatedPrediction: duel._id,
+          })
+        } else {
+          await Notification.create({
+            user: participant.user,
+            type: 'system',
+            title: 'Duel Resolved',
+            message: `The duel "${duel.question}" has been resolved. The outcome was ${finalOutcome.toUpperCase()}. Better luck next time!`,
+            read: false,
+            actionUrl: `/duel/${duelId}`,
+            relatedPrediction: duel._id,
+          })
+        }
+      })
+
+      // Also notify the creator that their duel was resolved
+      const creatorUser = await User.findById(duel.creator)
+      if (creatorUser) {
+        await Notification.create({
+          user: duel.creator,
+          type: 'duel_resolved',
+          title: 'Your Duel Has Been Resolved',
+          message: `Your duel "${duel.question}" has been resolved. The outcome was ${finalOutcome.toUpperCase()}.`,
+          read: false,
+          actionUrl: `/duel/${duelId}`,
+          relatedPrediction: duel._id,
+        })
+      }
+
+      // Create notifications in parallel (don't fail if some fail)
+      Promise.all(notificationPromises).catch((error) => {
+        console.error('Error creating resolution notifications:', error)
+        // Don't fail the resolution if notifications fail
+      })
+    } catch (notifError) {
+      console.error('Error setting up resolution notifications:', notifError)
+      // Don't fail the resolution if notifications fail
+    }
 
     return NextResponse.json(
       {

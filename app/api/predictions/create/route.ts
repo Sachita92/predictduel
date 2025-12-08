@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
+import Notification from '@/models/Notification'
 
 /**
  * API Route to Create a New Duel
@@ -112,7 +113,43 @@ export async function POST(req: NextRequest) {
       ...(transactionSignature && { transactionSignature }),
     })
 
-    // Step 8: Send back a success message with the duel
+    // Step 8: Create notifications for other users when a public duel is created
+    // Notify all users (except the creator) about the new duel
+    if (duelType === 'public') {
+      try {
+        // Get all users except the creator
+        const allUsers = await User.find({ _id: { $ne: creator._id } })
+        
+        // Create notifications in bulk (but limit to avoid overwhelming the system)
+        // For now, we'll notify all users, but in production you might want to:
+        // - Only notify users who follow the creator
+        // - Only notify users interested in the category
+        // - Limit to recent active users
+        const notificationPromises = allUsers.slice(0, 100).map((user) => 
+          Notification.create({
+            user: user._id,
+            type: 'duel_created',
+            title: 'New Duel Started! 🎯',
+            message: `@${creator.username} started a new duel: "${duel.question}"`,
+            read: false,
+            actionUrl: `/duel/${duel._id.toString()}`,
+            relatedUser: creator._id,
+            relatedPrediction: duel._id,
+          })
+        )
+        
+        // Create notifications in parallel (don't wait for all to complete)
+        Promise.all(notificationPromises).catch((error) => {
+          console.error('Error creating duel notifications:', error)
+          // Don't fail the duel creation if notifications fail
+        })
+      } catch (notifError) {
+        console.error('Error setting up duel notifications:', notifError)
+        // Don't fail the duel creation if notifications fail
+      }
+    }
+
+    // Step 9: Send back a success message with the duel
     // Like sending a confirmation letter back
     return NextResponse.json(
       { 

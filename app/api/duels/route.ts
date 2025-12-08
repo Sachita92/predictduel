@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || 'active' // active, pending, all
     const category = searchParams.get('category') // optional filter
+    const search = searchParams.get('search') // search query for question, category, or creator
     const limit = parseInt(searchParams.get('limit') || '50')
     const skip = parseInt(searchParams.get('skip') || '0')
 
@@ -41,13 +42,42 @@ export async function GET(req: NextRequest) {
       query.category = category
     }
 
+    // Search functionality - search in question, category, or creator username
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i') // Case-insensitive search
+      
+      // Search in question or category
+      query.$or = [
+        { question: searchRegex },
+        { category: searchRegex },
+      ]
+      
+      // Also search in creator username if we need to populate creator
+      // We'll handle this after populating creator
+    }
+
     // Fetch duels with creator information
-    const duels = await Duel.find(query)
+    let duels = await Duel.find(query)
       .populate('creator', 'username avatar walletAddress privyId')
       .sort({ createdAt: -1 }) // Newest first
-      .limit(limit)
+      .limit(limit * 2) // Fetch more if searching (we'll filter by creator username)
       .skip(skip)
       .lean() // Convert to plain objects for better performance
+
+    // If searching, also filter by creator username
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase()
+      duels = duels.filter((duel: any) => {
+        const creatorUsername = duel.creator?.username?.toLowerCase() || ''
+        return (
+          duel.question.toLowerCase().includes(searchLower) ||
+          duel.category.toLowerCase().includes(searchLower) ||
+          creatorUsername.includes(searchLower)
+        )
+      })
+      // Apply limit after filtering
+      duels = duels.slice(0, limit)
+    }
 
     // Format the response
     const formattedDuels = duels.map((duel: any) => ({

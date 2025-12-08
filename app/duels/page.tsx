@@ -47,6 +47,7 @@ export default function DuelsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [bettingDuelId, setBettingDuelId] = useState<string | null>(null)
+  const [bettingPrediction, setBettingPrediction] = useState<'yes' | 'no' | null>(null)
   const [betError, setBetError] = useState<string | null>(null)
   const [betSuccess, setBetSuccess] = useState<string | null>(null)
   
@@ -105,6 +106,7 @@ export default function DuelsPage() {
     }
     
     setBettingDuelId(duelId)
+    setBettingPrediction(prediction)
     setBetError(null)
     setBetSuccess(null)
     
@@ -184,6 +186,7 @@ export default function DuelsPage() {
       setBetError(error instanceof Error ? error.message : 'Failed to place bet')
     } finally {
       setBettingDuelId(null)
+      setBettingPrediction(null)
     }
   }
   
@@ -388,7 +391,7 @@ export default function DuelsPage() {
                       >
                         <div className="text-xs text-white/60 mb-1">YES</div>
                         <div className="font-bold text-success">
-                          {bettingDuelId === duel.id ? (
+                          {bettingDuelId === duel.id && bettingPrediction === 'yes' ? (
                             <Loader2 className="animate-spin mx-auto" size={16} />
                           ) : (
                             duel.yesCount
@@ -403,7 +406,7 @@ export default function DuelsPage() {
                       >
                         <div className="text-xs text-white/60 mb-1">NO</div>
                         <div className="font-bold text-danger">
-                          {bettingDuelId === duel.id ? (
+                          {bettingDuelId === duel.id && bettingPrediction === 'no' ? (
                             <Loader2 className="animate-spin mx-auto" size={16} />
                           ) : (
                             duel.noCount
