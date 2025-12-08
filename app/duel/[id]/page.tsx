@@ -523,28 +523,112 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           
           <h1 className="text-3xl md:text-4xl font-bold mb-4 font-display">{duel.question}</h1>
           
-          <div className="flex items-center justify-center mb-4">
-            <CountdownTimer targetDate={deadline} />
-          </div>
+          {/* Resolved Duel Summary Banner */}
+          {duel.status === 'resolved' && duel.outcome && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-success/20 to-primary-from/20 border-2 border-success/50 rounded-xl">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <div className="text-sm text-white/70 mb-1">Final Outcome</div>
+                  <div className="text-2xl font-bold">
+                    <Badge variant={duel.outcome === 'yes' ? 'success' : 'danger'} className="text-lg px-4 py-2">
+                      {duel.outcome.toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-white/70 mb-1">Total Pool</div>
+                  <div className="text-2xl font-bold gradient-text">
+                    {duel.poolSize.toFixed(2)} {currency}
+                  </div>
+                </div>
+                {hasParticipated && userParticipation && (
+                  <div className="w-full mt-2 pt-3 border-t border-white/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-white/70">Your Result</div>
+                        <Badge variant={userParticipation.won ? 'success' : 'danger'} className="mt-1">
+                          {userParticipation.won ? '🏆 Winner!' : 'Lost'}
+                        </Badge>
+                      </div>
+                      {userParticipation.won && userParticipation.payout && userParticipation.payout > 0 && (
+                        <div className="text-right">
+                          <div className="text-sm text-white/70">Your Payout</div>
+                          <div className="text-xl font-bold text-success">
+                            {userParticipation.payout.toFixed(2)} {currency}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {duel.status !== 'resolved' && (
+            <div className="flex items-center justify-center mb-4">
+              <CountdownTimer targetDate={deadline} />
+            </div>
+          )}
           
           <div className="text-center">
-            <Badge 
-              variant={
-                duel.status === 'active' ? 'success' :
-                duel.status === 'resolved' ? 'info' :
-                duel.status === 'pending' ? 'warning' :
-                'danger'
+            {(() => {
+              const deadlinePassed = deadlineDate ? new Date() >= deadlineDate : false
+              const isExpired = deadlinePassed && duel.status !== 'resolved'
+              
+              if (isExpired) {
+                return (
+                  <Badge variant="warning" className="text-lg px-4 py-2">
+                    ⏰ Deadline Passed - Awaiting Resolution
+                  </Badge>
+                )
               }
-              className="text-lg px-4 py-2"
-            >
-              {duel.status === 'active' ? 'Active' :
-               duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
-               duel.status === 'pending' ? 'Pending' :
-               'Cancelled'}
-            </Badge>
+              
+              return (
+                <Badge 
+                  variant={
+                    duel.status === 'active' ? 'success' :
+                    duel.status === 'resolved' ? 'info' :
+                    duel.status === 'pending' ? 'warning' :
+                    'danger'
+                  }
+                  className="text-lg px-4 py-2"
+                >
+                  {duel.status === 'active' ? 'Active' :
+                   duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
+                   duel.status === 'pending' ? 'Pending' :
+                   'Cancelled'}
+                </Badge>
+              )
+            })()}
           </div>
         </div>
         
+        {/* Expired Duel Notice */}
+        {isDeadlinePassed && duel.status !== 'resolved' && (
+          <Card variant="glass" className="p-6 mb-6 border-2 border-warning/50">
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">⏰</div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-warning mb-2">Deadline Has Passed</h3>
+                <p className="text-white/80 mb-3">
+                  This duel's deadline has passed. The creator needs to resolve it to determine winners.
+                </p>
+                {isCreator && (
+                  <div className="p-3 bg-warning/20 rounded-lg">
+                    <p className="text-sm text-white/90 font-semibold mb-1">
+                      👤 You are the creator
+                    </p>
+                    <p className="text-xs text-white/70">
+                      Click the "Resolve Duel" button below to set the outcome and determine winners.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Pool Stats */}
         <Card variant="glass" className="p-6 mb-6">
           <h3 className="text-xl font-bold mb-4">Pool Statistics</h3>
@@ -678,6 +762,22 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 )}
               </div>
               
+              {/* Winner Notice */}
+              {duel.status === 'resolved' && userParticipation.won && (
+                <div className="mb-4 p-4 bg-success/20 border-2 border-success/50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">🎉</span>
+                    <h4 className="text-lg font-bold text-success">You Won!</h4>
+                  </div>
+                  <p className="text-sm text-white/80 mb-2">
+                    Congratulations! Your prediction was correct. You can claim your winnings below.
+                  </p>
+                  <div className="text-xs text-white/60">
+                    Your payout: <span className="font-bold text-success text-sm">{userParticipation.payout?.toFixed(2) || '0.00'} {currency}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Claim Winnings Button */}
               {duel.status === 'resolved' && userParticipation.won && userParticipation.payout && userParticipation.payout > 0 && (
                 <div>
@@ -694,23 +794,30 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   )}
                   
                   {userParticipation.claimed ? (
-                    <div className="p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm text-center">
-                      ✓ Winnings Claimed
+                    <div className="p-4 bg-success/20 border-2 border-success/50 rounded-lg text-center">
+                      <div className="text-2xl mb-2">✓</div>
+                      <div className="text-success font-semibold">Winnings Claimed</div>
+                      <div className="text-xs text-white/60 mt-1">
+                        {userParticipation.payout.toFixed(2)} {currency} has been transferred to your wallet
+                      </div>
                     </div>
                   ) : (
                     <Button
                       onClick={handleClaim}
                       disabled={isClaiming}
-                      className="w-full"
+                      className="w-full text-lg py-4"
                       variant="success"
                     >
                       {isClaiming ? (
                         <>
-                          <Loader2 className="animate-spin mr-2" size={20} />
+                          <Loader2 className="animate-spin mr-2" size={24} />
                           Claiming...
                         </>
                       ) : (
-                        `Claim ${userParticipation.payout.toFixed(2)} ${currency}`
+                        <>
+                          <span className="text-xl mr-2">💰</span>
+                          Claim {userParticipation.payout.toFixed(2)} {currency}
+                        </>
                       )}
                     </Button>
                   )}

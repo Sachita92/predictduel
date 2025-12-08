@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Clock, Users, TrendingUp, Loader2, Filter } from 'lucide-react'
+import { Clock, Users, TrendingUp, Loader2, Filter, ChevronDown } from 'lucide-react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
@@ -48,10 +48,14 @@ export default function DuelsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [selectedStatus, setSelectedStatus] = useState<string>('active') // active, resolved, all
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
   const [bettingDuelId, setBettingDuelId] = useState<string | null>(null)
   const [bettingPrediction, setBettingPrediction] = useState<'yes' | 'no' | null>(null)
   const [betError, setBetError] = useState<string | null>(null)
   const [betSuccess, setBetSuccess] = useState<string | null>(null)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
+  const categoryDropdownRef = useRef<HTMLDivElement>(null)
   
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
@@ -59,6 +63,27 @@ export default function DuelsPage() {
   useEffect(() => {
     fetchDuels()
   }, [selectedCategory, selectedStatus])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
+        setShowStatusDropdown(false)
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
+        setShowCategoryDropdown(false)
+      }
+    }
+    
+    if (showStatusDropdown || showCategoryDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showStatusDropdown, showCategoryDropdown])
 
   const fetchDuels = async () => {
     setIsLoading(true)
@@ -261,59 +286,100 @@ export default function DuelsPage() {
           </p>
         </div>
 
-        {/* Status Filter */}
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedStatus('active')}
-            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
-              selectedStatus === 'active'
-                ? 'gradient-primary text-white'
-                : 'bg-white/5 hover:bg-white/10 text-white/70'
-            }`}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatus('resolved')}
-            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
-              selectedStatus === 'resolved'
-                ? 'gradient-primary text-white'
-                : 'bg-white/5 hover:bg-white/10 text-white/70'
-            }`}
-          >
-            Completed
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatus('all')}
-            className={`px-4 py-2 rounded-lg transition-all font-semibold ${
-              selectedStatus === 'all'
-                ? 'gradient-primary text-white'
-                : 'bg-white/5 hover:bg-white/10 text-white/70'
-            }`}
-          >
-            All
-          </button>
-        </div>
-
-        {/* Category Filter */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          {categories.map((category) => (
+        {/* Filters - Dropdowns */}
+        <div className="mb-6 flex flex-wrap gap-4">
+          {/* Status Dropdown */}
+          <div className="relative" ref={statusDropdownRef}>
             <button
-              key={category}
               type="button"
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-lg transition-all ${
-                selectedCategory === category
-                  ? 'gradient-primary text-white'
-                  : 'bg-white/5 hover:bg-white/10 text-white/70'
-              }`}
+              onClick={() => {
+                setShowStatusDropdown(!showStatusDropdown)
+                setShowCategoryDropdown(false)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white hover:bg-white/10 transition-colors min-w-[140px]"
             >
-              {category}
+              <Filter size={16} />
+              <span className="capitalize">
+                {selectedStatus === 'active' ? 'Active' : selectedStatus === 'resolved' ? 'Completed' : 'All Status'}
+              </span>
+              <ChevronDown size={16} className={`transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`} />
             </button>
-          ))}
+            {showStatusDropdown && (
+              <div className="absolute top-full left-0 mt-2 w-full bg-background-dark border border-white/10 rounded-lg overflow-hidden z-20 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatus('active')
+                    setShowStatusDropdown(false)
+                  }}
+                  className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${
+                    selectedStatus === 'active' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatus('resolved')
+                    setShowStatusDropdown(false)
+                  }}
+                  className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${
+                    selectedStatus === 'resolved' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  Completed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatus('all')
+                    setShowStatusDropdown(false)
+                  }}
+                  className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${
+                    selectedStatus === 'all' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Category Dropdown */}
+          <div className="relative" ref={categoryDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCategoryDropdown(!showCategoryDropdown)
+                setShowStatusDropdown(false)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white hover:bg-white/10 transition-colors min-w-[140px]"
+            >
+              <Filter size={16} />
+              <span>{selectedCategory}</span>
+              <ChevronDown size={16} className={`transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showCategoryDropdown && (
+              <div className="absolute top-full left-0 mt-2 w-full bg-background-dark border border-white/10 rounded-lg overflow-hidden z-20 shadow-lg max-h-[300px] overflow-y-auto">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(category)
+                      setShowCategoryDropdown(false)
+                    }}
+                    className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${
+                      selectedCategory === category ? 'bg-white/10' : ''
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Loading State */}
@@ -387,11 +453,26 @@ export default function DuelsPage() {
                           {duel.outcome.toUpperCase()}
                         </Badge>
                       )}
-                      <Badge
-                        variant={duel.status === 'active' ? 'success' : duel.status === 'resolved' ? 'info' : 'default'}
-                      >
-                        {duel.status}
-                      </Badge>
+                      {(() => {
+                        const deadlinePassed = new Date(duel.deadline) < new Date()
+                        const isExpired = deadlinePassed && duel.status !== 'resolved'
+                        
+                        if (isExpired) {
+                          return (
+                            <Badge variant="warning" className="text-xs">
+                              Awaiting Resolution
+                            </Badge>
+                          )
+                        }
+                        
+                        return (
+                          <Badge
+                            variant={duel.status === 'active' ? 'success' : duel.status === 'resolved' ? 'info' : 'default'}
+                          >
+                            {duel.status}
+                          </Badge>
+                        )
+                      })()}
                     </div>
                   </div>
 
@@ -447,17 +528,30 @@ export default function DuelsPage() {
                     </div>
                   </div>
 
+                  {/* Expired Duel Notice */}
+                  {new Date(duel.deadline) < new Date() && duel.status !== 'resolved' && (
+                    <div className="mb-4 p-3 bg-warning/20 border border-warning/30 rounded-lg">
+                      <div className="text-sm font-semibold text-warning mb-1">⏰ Deadline Passed</div>
+                      <div className="text-xs text-white/70">
+                        Creator needs to resolve this duel. Winners will be determined after resolution.
+                      </div>
+                    </div>
+                  )}
+
                   {/* Winners Section for Resolved Duels */}
                   {duel.status === 'resolved' && duel.outcome && (
-                    <div className="mb-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="mb-4 p-4 bg-success/10 border border-success/30 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-white/80">Outcome</span>
+                        <span className="text-sm font-semibold text-white">🏆 Outcome</span>
                         <Badge variant={duel.outcome === 'yes' ? 'success' : 'danger'}>
                           {duel.outcome.toUpperCase()}
                         </Badge>
                       </div>
-                      <div className="text-xs text-white/60 mt-2">
-                        Total Pool: <span className="font-semibold text-white">{duel.poolSize.toFixed(2)} SOL</span>
+                      <div className="text-xs text-white/80 mt-2">
+                        Total Pool: <span className="font-semibold text-success">{duel.poolSize.toFixed(2)} SOL</span>
+                      </div>
+                      <div className="text-xs text-white/60 mt-1">
+                        Click "View Details" to see winners and claim prizes
                       </div>
                     </div>
                   )}
