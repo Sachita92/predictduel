@@ -358,9 +358,10 @@ pub struct CreateMarket<'info> {
             creator.key().as_ref(),
             &market_index.to_le_bytes()
         ],
-        bump
+        bump,
+        owner = system_program.key()
     )]
-    pub market_vault: SystemAccount<'info>,
+    pub market_vault: UncheckedAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -390,9 +391,10 @@ pub struct PlaceBet<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump
+        bump,
+        owner = system_program.key()
     )]
-    pub market_vault: SystemAccount<'info>,
+    pub market_vault: UncheckedAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -428,9 +430,10 @@ pub struct ClaimWinnings<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump
+        bump,
+        owner = system_program.key()
     )]
-    pub market_vault: SystemAccount<'info>,
+    pub market_vault: UncheckedAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
@@ -466,9 +469,10 @@ pub struct RefundStake<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump
+        bump,
+        owner = system_program.key()
     )]
-    pub market_vault: SystemAccount<'info>,
+    pub market_vault: UncheckedAccount<'info>,
     
     pub system_program: Program<'info, System>,
 }
