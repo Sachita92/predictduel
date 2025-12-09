@@ -11,7 +11,7 @@ import { PredictDuelClient, MarketCategory, MarketType } from '../solana-program
 import { User } from '@privy-io/react-auth'
 
 // Program ID - deployed to devnet
-const PROGRAM_ID = new PublicKey('4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY')
+const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
 
 // RPC endpoints
 const RPC_ENDPOINTS = {

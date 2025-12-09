@@ -78,6 +78,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimSuccess, setClaimSuccess] = useState(false)
+  const [claimTransactionSignature, setClaimTransactionSignature] = useState<string | null>(null)
   
   const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
   const currency = getAppCurrency()
@@ -450,12 +451,14 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       setClaimSuccess(true)
+      setClaimTransactionSignature(onChainResult.signature)
       
       // Refresh duel data
       setTimeout(() => {
         fetchDuel()
         setClaimSuccess(false)
-      }, 2000)
+        setClaimTransactionSignature(null)
+      }, 3000)
       
     } catch (error) {
       console.error('Error claiming winnings:', error)
@@ -779,7 +782,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               )}
 
               {/* Claim Winnings Button */}
-              {duel.status === 'resolved' && userParticipation.won && userParticipation.payout && userParticipation.payout > 0 && (
+              {duel.status === 'resolved' && userParticipation && userParticipation.won && userParticipation.payout && userParticipation.payout > 0 && (
                 <div>
                   {claimError && (
                     <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
@@ -789,7 +792,19 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   
                   {claimSuccess && (
                     <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm">
-                      ✓ Winnings claimed successfully! Refreshing...
+                      <div className="flex items-center justify-between">
+                        <span>✓ Winnings claimed successfully!</span>
+                        {claimTransactionSignature && (
+                          <a
+                            href={`https://solscan.io/tx/${claimTransactionSignature}?cluster=devnet`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-success hover:underline ml-2 text-xs"
+                          >
+                            View Transaction
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
                   

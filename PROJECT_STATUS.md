@@ -51,6 +51,21 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ POST: Create new duel/prediction in MongoDB
    - ✅ Handles on-chain market creation (stores marketPda and transaction signature)
 
+8. **Leaderboard API** (`/api/leaderboard`)
+   - ✅ GET: Fetch top users sorted by stats (totalEarned, wins, winRate, currentStreak)
+   - ✅ Supports time filters (today, week, all-time)
+   - ✅ Calculates and returns current user's rank
+   - ✅ Returns formatted leaderboard data
+
+9. **Lightning Round API** (`/api/lightning`)
+   - ✅ GET: Fetch resolved duels with outcomes for lightning game
+   - ✅ Returns questions and their actual outcomes
+
+10. **Activity Feed API** (`/api/activity/feed`)
+    - ✅ GET: Fetch recent activity events for home page ticker
+    - ✅ Returns recent wins, new duels created, high streaks, top earners
+    - ✅ Returns aggregate stats (total duels, total SOL won)
+
 4. **Database Models**
    - ✅ User model (with stats, achievements)
    - ✅ Duel model (with participants, stakes, outcomes)
@@ -103,7 +118,33 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ✅ Edit duel modal (stake, deadline)
    - ✅ Delete duel confirmation
 
-7. **Login/Auth**
+6. **Leaderboard Page** (`/leaderboard`)
+   - ✅ Displays real user data from `/api/leaderboard`
+   - ✅ Shows actual user statistics (wins, win rate, total earned, streaks)
+   - ✅ Current user's rank display when logged in
+   - ✅ Sorting by different metrics (Total Earned, Wins, Win Rate, Streak)
+   - ✅ Time period filters (All-Time, This Week, Today)
+   - ✅ Top 3 podium display
+   - ✅ Loading and error states
+   - ✅ Empty state handling
+
+7. **Lightning Round Page** (`/lightning`)
+   - ✅ Uses real resolved duels from `/api/lightning`
+   - ✅ Fetches actual questions from resolved duels
+   - ✅ Checks answers against real outcomes
+   - ✅ Score and streak tracking
+   - ✅ 60-second timer
+   - ✅ Loading and error states
+   - ✅ Game over screen with score
+
+8. **Home Page** (`/`)
+   - ✅ Activity feed ticker with real data from `/api/activity/feed`
+   - ✅ Shows recent wins, new duels, streaks, top earners
+   - ✅ Stats banner with real aggregate data
+   - ✅ Auto-refreshes every 30 seconds
+   - ✅ Loading and error states
+
+9. **Login/Auth**
    - ✅ Privy authentication integration
    - ✅ Wallet connection
 
@@ -124,12 +165,6 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
    - ❌ No API integration
    - ❌ No real betting functionality
    - **Status**: UI only, needs API connection
-
-2. **Leaderboard Page** (`/leaderboard`)
-   - ❌ Uses hardcoded `mockLeaderboard` array
-   - ❌ No API endpoint for leaderboard
-   - ❌ Tabs don't filter real data
-   - **Status**: UI only, needs backend implementation
 
 ### Components (May Need Work)
 1. **NotificationDropdown** (`components/notifications/NotificationDropdown.tsx`)
@@ -154,11 +189,10 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
      - Update participant record
 
 2. **Leaderboard API** (`/api/leaderboard`)
-   - ❌ **MISSING**: Fetch top users by various metrics
-   - Should support:
-     - Time filters (today, week, all-time)
-     - Sorting (wins, win rate, total earned, streak)
-     - Pagination
+   - ✅ **IMPLEMENTED**: Fetch top users by various metrics
+   - ✅ Supports time filters (today, week, all-time)
+   - ✅ Supports sorting (wins, win rate, total earned, streak)
+   - ✅ Calculates user rank
 
 3. **Feed API** (`/api/feed`)
    - ❌ **MISSING**: Personalized feed of duels
@@ -225,10 +259,10 @@ This document outlines what is **frontend-only** (UI mockups) and what **work re
 ### Medium Priority
 
 3. **Leaderboard Backend**
-   - Create `/api/leaderboard/route.ts`
-   - Query users sorted by stats
-   - Support time filters
-   - Connect to leaderboard page
+   - ✅ **COMPLETED**: Created `/api/leaderboard/route.ts`
+   - ✅ Query users sorted by stats
+   - ✅ Support time filters
+   - ✅ Connected to leaderboard page
 
 4. **Feed Backend**
    - Create `/api/feed/route.ts`
@@ -296,13 +330,21 @@ Before deploying to production:
 
 **Frontend-Only Pages:**
 - Feed page (mock data)
-- Leaderboard page (mock data)
+
+**Recently Completed:**
+- ✅ Leaderboard page (now uses real data)
+- ✅ Lightning Round page (now uses real data)
+- ✅ Home page activity feed (now uses real data)
 
 **Missing Backend APIs:**
 - Claim winnings
-- Leaderboard
 - Feed
 - Search
+
+**Recently Added APIs:**
+- ✅ Leaderboard API (`/api/leaderboard`)
+- ✅ Lightning Round API (`/api/lightning`)
+- ✅ Activity Feed API (`/api/activity/feed`)
 
 **Solana Integration:**
 - ✅ Market creation works
@@ -317,6 +359,12 @@ Before deploying to production:
 - ✅ Notification system (bet notifications)
 - ✅ Profile shows created duels
 - ✅ Improved time formatting
+- ✅ Leaderboard page with real data integration
+- ✅ Lightning Round page with real duel questions and outcomes
+- ✅ Home page activity feed with real events
+- ✅ Leaderboard API with sorting and filtering
+- ✅ Lightning Round API for resolved duels
+- ✅ Activity Feed API for home page ticker
 
 **Estimated Completion:**
 - Core betting flow: ✅ **COMPLETED**

@@ -14,7 +14,7 @@ import * as anchor from '@coral-xyz/anchor'
 import { PredictDuelClient, MarketCategory, MarketType } from '../solana-program/client/sdk'
 
 // Program ID - deployed to devnet
-const PROGRAM_ID = new PublicKey('4HJaxVtdUwNYxqbURcNbsaEKR7qtdd75hLajJMsD5wUY')
+const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
 
 // RPC endpoint
 const RPC_ENDPOINT = 'https://api.devnet.solana.com'

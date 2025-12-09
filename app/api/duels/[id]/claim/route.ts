@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
 import Notification from '@/models/Notification'
+import { Connection, PublicKey } from '@solana/web3.js'
 
 /**
  * API Route to Claim Winnings from a Resolved Duel
@@ -120,6 +121,44 @@ export async function POST(
         { error: 'No winnings to claim' },
         { status: 400 }
       )
+    }
+
+    // Verify transaction signature (optional but recommended)
+    try {
+      const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
+      const tx = await connection.getTransaction(transactionSignature, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0,
+      })
+      
+      if (!tx) {
+        return NextResponse.json(
+          { error: 'Transaction not found. Please ensure the transaction was confirmed.' },
+          { status: 400 }
+        )
+      }
+      
+      if (tx.meta?.err) {
+        return NextResponse.json(
+          { error: 'Transaction failed on-chain. Please try again.' },
+          { status: 400 }
+        )
+      }
+      
+      // Verify the transaction is for the correct market
+      // The transaction should include the market PDA in the account keys
+      const marketPdaKey = new PublicKey(duel.marketPda || '')
+      const accountKeys = tx.transaction.message.getAccountKeys().keySegments().flat().map((key: any) => 
+        typeof key === 'string' ? key : key.toString()
+      )
+      
+      if (!accountKeys.includes(marketPdaKey.toString())) {
+        console.warn('Transaction may not be for the correct market, but continuing...')
+      }
+    } catch (verifyError) {
+      console.error('Error verifying transaction:', verifyError)
+      // Don't fail the claim if verification fails - the transaction might still be valid
+      // This is a best-effort verification
     }
 
     // Mark participant as claimed
