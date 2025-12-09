@@ -2,19 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, Trophy, RotateCcw } from 'lucide-react'
+import { Zap, Trophy, RotateCcw, Loader2 } from 'lucide-react'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 
-const questions = [
-  'Will BTC hit $100K today?',
-  'Will it rain in 2 hours?',
-  'Will SOL pump 5%?',
-  'Will the market close green?',
-  'Will ETH break $3000?',
-]
+interface LightningDuel {
+  id: string
+  question: string
+  category: string
+  outcome: 'yes' | 'no'
+}
 
 export default function LightningPage() {
   const [timeLeft, setTimeLeft] = useState(60)
@@ -24,6 +23,36 @@ export default function LightningPage() {
   const [gameActive, setGameActive] = useState(false)
   const [gameOver, setGameOver] = useState(false)
   const [lastResult, setLastResult] = useState<'correct' | 'wrong' | null>(null)
+  const [duels, setDuels] = useState<LightningDuel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Fetch resolved duels for lightning round
+  useEffect(() => {
+    const fetchDuels = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await fetch('/api/lightning?limit=100')
+        const data = await response.json()
+        
+        if (data.success && data.duels && data.duels.length > 0) {
+          // Shuffle duels for variety
+          const shuffled = [...data.duels].sort(() => Math.random() - 0.5)
+          setDuels(shuffled)
+        } else {
+          setError('No resolved duels available. Play some duels first!')
+        }
+      } catch (err) {
+        console.error('Error fetching lightning duels:', err)
+        setError('Failed to load questions. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchDuels()
+  }, [])
   
   useEffect(() => {
     if (!gameActive || gameOver) return
@@ -37,8 +66,13 @@ export default function LightningPage() {
   }, [timeLeft, gameActive, gameOver])
   
   const handleAnswer = (answer: 'yes' | 'no') => {
-    // Simulate answer (in real app, this would check against actual data)
-    const isCorrect = Math.random() > 0.5
+    if (duels.length === 0) return
+    
+    const currentDuel = duels[currentQuestion]
+    if (!currentDuel) return
+    
+    // Check answer against actual outcome
+    const isCorrect = answer === currentDuel.outcome
     
     if (isCorrect) {
       setScore(score + (streak + 1) * 10)
@@ -50,18 +84,24 @@ export default function LightningPage() {
     }
     
     setTimeout(() => {
-      setCurrentQuestion((prev) => (prev + 1) % questions.length)
+      // Move to next question, cycle through available duels
+      setCurrentQuestion((prev) => (prev + 1) % duels.length)
       setLastResult(null)
     }, 1000)
   }
   
   const startGame = () => {
+    if (duels.length === 0) {
+      setError('No questions available. Please try again later.')
+      return
+    }
     setGameActive(true)
     setTimeLeft(60)
     setScore(0)
     setStreak(0)
     setCurrentQuestion(0)
     setGameOver(false)
+    setError(null)
   }
   
   if (!gameActive) {
@@ -70,23 +110,53 @@ export default function LightningPage() {
         <TopNav />
         <div className="flex items-center justify-center min-h-[80vh] px-4">
           <Card variant="glass" className="p-8 text-center max-w-md w-full">
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              className="text-6xl mb-4"
-            >
-              ⚡
-            </motion.div>
-            <h1 className="text-4xl font-bold mb-4 font-display">Lightning Round</h1>
-            <p className="text-white/70 mb-8">
-              Answer as many predictions as you can in 60 seconds!
-              <br />
-              Streaks multiply your points.
-            </p>
-            <Button size="lg" glow onClick={startGame} className="w-full">
-              <Zap className="mr-2" size={20} />
-              Start Lightning Round
-            </Button>
+            {loading ? (
+              <>
+                <Loader2 className="mx-auto mb-4 animate-spin text-primary-from" size={48} />
+                <h1 className="text-4xl font-bold mb-4 font-display">Loading Questions...</h1>
+                <p className="text-white/70">Preparing your lightning round</p>
+              </>
+            ) : error ? (
+              <>
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                  className="text-6xl mb-4"
+                >
+                  ⚡
+                </motion.div>
+                <h1 className="text-4xl font-bold mb-4 font-display">Lightning Round</h1>
+                <p className="text-white/70 mb-4 text-danger">{error}</p>
+                <Button size="lg" glow onClick={() => window.location.reload()} className="w-full">
+                  <RotateCcw className="mr-2" size={20} />
+                  Retry
+                </Button>
+              </>
+            ) : (
+              <>
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                  className="text-6xl mb-4"
+                >
+                  ⚡
+                </motion.div>
+                <h1 className="text-4xl font-bold mb-4 font-display">Lightning Round</h1>
+                <p className="text-white/70 mb-8">
+                  Answer as many predictions as you can in 60 seconds!
+                  <br />
+                  Streaks multiply your points.
+                  <br />
+                  <span className="text-sm text-white/50 mt-2 block">
+                    {duels.length} questions ready
+                  </span>
+                </p>
+                <Button size="lg" glow onClick={startGame} className="w-full" disabled={duels.length === 0}>
+                  <Zap className="mr-2" size={20} />
+                  Start Lightning Round
+                </Button>
+              </>
+            )}
           </Card>
         </div>
         <MobileNav />
@@ -183,7 +253,9 @@ export default function LightningPage() {
             className="w-full max-w-md z-10"
           >
             <Card variant="glass" className="p-8 text-center">
-              <h2 className="text-3xl font-bold mb-8">{questions[currentQuestion]}</h2>
+              <h2 className="text-3xl font-bold mb-8">
+                {duels[currentQuestion]?.question || 'Loading question...'}
+              </h2>
               
               <div className="grid grid-cols-2 gap-4">
                 <Button

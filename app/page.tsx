@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, TrendingUp, Zap, Users } from 'lucide-react'
@@ -9,8 +9,60 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 
+interface Activity {
+  type: string
+  emoji: string
+  message: string
+  timestamp: string
+}
+
 export default function Home() {
   const router = useRouter()
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalDuels: 0,
+    totalWon: 0,
+  })
+  
+  // Fetch real activity feed
+  useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/activity/feed?limit=20')
+        const data = await response.json()
+        
+        if (data.success) {
+          if (data.activities) {
+            setActivities(data.activities)
+          }
+          if (data.stats) {
+            setStats(data.stats)
+          }
+        } else {
+          // Fallback to default messages if no activities
+          setActivities([
+            { type: 'default', emoji: '🔥', message: 'Welcome to PredictDuel! Start your first prediction.', timestamp: new Date().toISOString() },
+          ])
+        }
+      } catch (error) {
+        console.error('Error fetching activities:', error)
+        // Fallback to default messages on error
+        setActivities([
+          { type: 'default', emoji: '🔥', message: 'Welcome to PredictDuel! Start your first prediction.', timestamp: new Date().toISOString() },
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchActivities()
+    
+    // Refresh activities every 30 seconds
+    const interval = setInterval(fetchActivities, 30000)
+    return () => clearInterval(interval)
+  }, [])
   
   const handleStartDuel = useCallback(() => {
     // When button is clicked, take user to the create duel page
@@ -36,32 +88,33 @@ export default function Home() {
                 <span className="text-sm font-medium">LIVE</span>
               </div>
               <div className="flex-1 overflow-hidden relative">
-                <motion.div
-                  initial={{ x: '-100%' }}
-                  animate={{ x: '100%' }}
-                  transition={{
-                    duration: 25,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                  className="flex items-center gap-8 whitespace-nowrap"
-                >
-                  <span className="text-white/80">
-                    🔥 @alice just won 0.5 SOL predicting BTC pump!
-                  </span>
-                  <span className="text-white/80">
-                    ⚡ @bob challenged @charlie to a weather duel
-                  </span>
-                  <span className="text-white/80">
-                    🏆 @dave reached #1 on the leaderboard!
-                  </span>
-                  <span className="text-white/80">
-                    💰 @eve won 1.2 SOL in a crypto prediction
-                  </span>
-                  <span className="text-white/80">
-                    🎯 @frank is on a 10-win streak!
-                  </span>
-                </motion.div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-2">
+                    <span className="text-white/60 text-sm">Loading activity...</span>
+                  </div>
+                ) : activities.length > 0 ? (
+                  <motion.div
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{
+                      duration: activities.length * 8, // Adjust speed based on number of activities
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="flex items-center gap-8 whitespace-nowrap"
+                  >
+                    {/* Duplicate activities for seamless loop */}
+                    {[...activities, ...activities].map((activity, index) => (
+                      <span key={`${activity.timestamp}-${index}`} className="text-white/80">
+                        {activity.emoji} {activity.message}
+                      </span>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <div className="flex items-center justify-center py-2">
+                    <span className="text-white/60 text-sm">No recent activity</span>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -150,8 +203,8 @@ export default function Home() {
             className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             {[
-              { icon: Users, label: '10,000+', sublabel: 'Predictions Made' },
-              { icon: TrendingUp, label: '$50K+', sublabel: 'Won' },
+              { icon: Users, label: stats.totalDuels > 0 ? `${stats.totalDuels.toLocaleString()}+` : '10,000+', sublabel: 'Predictions Made' },
+              { icon: TrendingUp, label: stats.totalWon > 0 ? `${stats.totalWon.toFixed(1)} SOL` : '$50K+', sublabel: 'Won' },
               { icon: Zap, label: '1ms', sublabel: 'Settlement' },
             ].map((stat, index) => {
               const Icon = stat.icon
