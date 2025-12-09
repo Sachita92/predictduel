@@ -184,100 +184,103 @@ export default function LeaderboardPage() {
             
             {/* Top 3 Podium */}
             {leaderboard.length > 0 && (
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {[1, 0, 2].map((index) => {
-                  const user = leaderboard[index]
-                  if (!user) return null
-            
-            const isTop = user.rank === 1
-            const colors = {
-              1: 'from-yellow-400 to-yellow-600',
-              2: 'from-gray-300 to-gray-500',
-              3: 'from-orange-400 to-orange-600',
-            }
-            
-            return (
-              <motion.div
-                key={user.rank}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`
-                  ${isTop ? 'order-2' : index === 0 ? 'order-1' : 'order-3'}
-                `}
-              >
-                <Card
-                  variant={isTop ? 'gradient' : 'glass'}
-                  className={`p-6 text-center ${isTop ? 'scale-110' : ''}`}
-                >
-                  {isTop && (
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="text-3xl mb-2"
-                    >
-                      👑
-                    </motion.div>
-                  )}
-                  <div className={`
-                    w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold
-                    ${isTop ? 'bg-white/20' : 'gradient-primary'}
-                  `}>
-                    {user.avatar || user.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="font-bold text-lg mb-1">{user.username}</div>
-                  <div className="flex items-center justify-center gap-1 text-accent mb-2">
-                    <Flame size={16} />
-                    <span className="text-sm font-semibold">{user.streak} streak</span>
-                  </div>
-                  <div className="text-2xl font-bold mb-1">{user.totalWon.toFixed(2)} SOL</div>
-                  <div className="text-sm text-white/60">{user.winRate.toFixed(1)}% win rate</div>
-                </Card>
-              </motion.div>
-            )
-          })}
-        </div>
-        
-            {/* Rest of Leaderboard */}
-            {leaderboard.length > 3 && (
-              <div className="space-y-2">
-                {leaderboard.slice(3).map((user, index) => (
-                  <motion.div
-                    key={user.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                  >
-                    <Card variant="glass" hover className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="text-2xl font-bold text-white/40 w-8">
-                            {user.rank}
-                          </div>
-                          <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {[1, 0, 2].map((index) => {
+                    const user = leaderboard[index]
+                    if (!user) return null
+              
+                    const isTop = user.rank === 1
+                    const colors = {
+                      1: 'from-yellow-400 to-yellow-600',
+                      2: 'from-gray-300 to-gray-500',
+                      3: 'from-orange-400 to-orange-600',
+                    }
+              
+                    return (
+                      <motion.div
+                        key={user.rank}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={`
+                          ${isTop ? 'order-2' : index === 0 ? 'order-1' : 'order-3'}
+                        `}
+                      >
+                        <Card
+                          variant={isTop ? 'gradient' : 'glass'}
+                          className={`p-6 text-center ${isTop ? 'scale-110' : ''}`}
+                        >
+                          {isTop && (
+                            <motion.div
+                              animate={{ rotate: [0, 10, -10, 0] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="text-3xl mb-2"
+                            >
+                              👑
+                            </motion.div>
+                          )}
+                          <div className={`
+                            w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold
+                            ${isTop ? 'bg-white/20' : 'gradient-primary'}
+                          `}>
                             {user.avatar || user.username.charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <div className="font-semibold">{user.username}</div>
-                            <div className="flex items-center gap-2 text-sm text-white/60">
-                              <span className="flex items-center gap-1">
-                                <Flame size={12} className="text-accent" />
-                                {user.streak}
-                              </span>
-                              <span>•</span>
-                              <span>{user.winRate.toFixed(1)}% win rate</span>
+                          <div className="font-bold text-lg mb-1">{user.username}</div>
+                          <div className="flex items-center justify-center gap-1 text-accent mb-2">
+                            <Flame size={16} />
+                            <span className="text-sm font-semibold">{user.streak} streak</span>
+                          </div>
+                          <div className="text-2xl font-bold mb-1">{user.totalWon.toFixed(2)} SOL</div>
+                          <div className="text-sm text-white/60">{user.winRate.toFixed(1)}% win rate</div>
+                        </Card>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+                
+                {/* Rest of Leaderboard */}
+                {leaderboard.length > 3 && (
+                  <div className="space-y-2">
+                    {leaderboard.slice(3).map((user, index) => (
+                      <motion.div
+                        key={user.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 + index * 0.05 }}
+                      >
+                        <Card variant="glass" hover className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="text-2xl font-bold text-white/40 w-8">
+                                {user.rank}
+                              </div>
+                              <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
+                                {user.avatar || user.username.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-semibold">{user.username}</div>
+                                <div className="flex items-center gap-2 text-sm text-white/60">
+                                  <span className="flex items-center gap-1">
+                                    <Flame size={12} className="text-accent" />
+                                    {user.streak}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{user.winRate.toFixed(1)}% win rate</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-lg">{user.totalWon.toFixed(2)} SOL</div>
+                              <div className="text-xs text-white/40">{user.wins} wins</div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-lg">{user.totalWon.toFixed(2)} SOL</div>
-                          <div className="text-xs text-white/40">{user.wins} wins</div>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
             
             {leaderboard.length === 0 && !loading && (
