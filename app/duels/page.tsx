@@ -54,6 +54,7 @@ export default function DuelsPage() {
   const [bettingPrediction, setBettingPrediction] = useState<'yes' | 'no' | null>(null)
   const [betError, setBetError] = useState<string | null>(null)
   const [betSuccess, setBetSuccess] = useState<string | null>(null)
+  const [votedDuels, setVotedDuels] = useState<Set<string>>(new Set()) // Track which duels user has voted on
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const categoryDropdownRef = useRef<HTMLDivElement>(null)
   
@@ -201,6 +202,7 @@ export default function DuelsPage() {
       }
       
       setBetSuccess(`Bet placed successfully! ${prediction.toUpperCase()}`)
+      setVotedDuels(prev => new Set(prev).add(duelId)) // Mark as voted immediately
       
       // Refresh duels
       setTimeout(() => {
@@ -211,6 +213,12 @@ export default function DuelsPage() {
     } catch (error) {
       console.error('Error placing bet:', error)
       setBetError(error instanceof Error ? error.message : 'Failed to place bet')
+      // Remove from votedDuels on error to allow retry
+      setVotedDuels(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(duelId)
+        return newSet
+      })
     } finally {
       setBettingDuelId(null)
       setBettingPrediction(null)
@@ -559,12 +567,12 @@ export default function DuelsPage() {
                   {/* Prediction Stats / Betting Buttons */}
                   {authenticated && user?.id !== duel.creator.privyId && 
                    (duel.status === 'active' || duel.status === 'pending') &&
-                   new Date(duel.deadline) > new Date() ? (
+                   new Date(duel.deadline) > new Date() && !votedDuels.has(duel.id) ? (
                     <div className="flex gap-2 mb-4">
                       <button
                         type="button"
                         onClick={() => handleBet(duel.id, 'yes')}
-                        disabled={bettingDuelId === duel.id}
+                        disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
                         className="flex-1 bg-success/20 hover:bg-success/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-success/30 hover:border-success/50"
                       >
                         <div className="text-xs text-white/60 mb-1">YES</div>
@@ -579,7 +587,7 @@ export default function DuelsPage() {
                       <button
                         type="button"
                         onClick={() => handleBet(duel.id, 'no')}
-                        disabled={bettingDuelId === duel.id}
+                        disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
                         className="flex-1 bg-danger/20 hover:bg-danger/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-danger/30 hover:border-danger/50"
                       >
                         <div className="text-xs text-white/60 mb-1">NO</div>

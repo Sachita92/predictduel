@@ -66,6 +66,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [betSuccess, setBetSuccess] = useState(false)
   const [selectedPrediction, setSelectedPrediction] = useState<'yes' | 'no' | null>(null)
   const [betAmount, setBetAmount] = useState(0.1)
+  const [hasVoted, setHasVoted] = useState(false) // Track if user has voted (optimistic)
   
   // Resolution state
   const [isResolving, setIsResolving] = useState(false)
@@ -104,7 +105,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   )
   
   const isCreator = user?.id && duel?.creator.privyId === user.id
-  const hasParticipated = !!userParticipation
+  const hasParticipated = !!userParticipation || hasVoted // Include optimistic state
   const isDuelActive = duel?.status === 'active' || duel?.status === 'pending'
   const isDeadlineValid = duel?.deadline && new Date(duel.deadline) > new Date()
   const canBet = authenticated && !isCreator && !hasParticipated && isDuelActive && isDeadlineValid
@@ -167,6 +168,14 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       setDuel(data.duel)
+      
+      // Sync hasVoted with server state
+      if (currentUserId && data.duel.participants) {
+        const participated = data.duel.participants.some(
+          (p: any) => p.user.id === currentUserId
+        )
+        setHasVoted(participated)
+      }
     } catch (error) {
       console.error('Error fetching duel:', error)
       setBetError(error instanceof Error ? error.message : 'Failed to load duel')
@@ -256,6 +265,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       setBetSuccess(true)
+      setHasVoted(true) // Immediately mark as voted to disable buttons
       
       // Refresh duel data
       setTimeout(() => {
@@ -266,6 +276,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } catch (error) {
       console.error('Error placing bet:', error)
       setBetError(error instanceof Error ? error.message : 'Failed to place bet')
+      // Don't set hasVoted on error, allow retry
     } finally {
       setIsBetting(false)
     }

@@ -281,25 +281,42 @@ export class PredictDuelClient {
       );
     }
     
-    // Create Program instance using two-parameter version (matches test file approach)
+    // Create Program instance using two-parameter version
     // Anchor extracts programId from metadata.address
-    // Ensure the address is set as a string to avoid any serialization issues
+    // We ensure metadata.address is a clean string to avoid "_bn" errors from module bundling
     try {
-      // Double-check that metadata.address is set correctly as a string
-      if (!idlParsed.metadata.address || typeof idlParsed.metadata.address !== 'string') {
-        idlParsed.metadata.address = programIdString;
+      // Create a completely fresh IDL object to avoid any reference issues
+      // This ensures we have a clean object without any hidden properties that might cause issues
+      const cleanIdl = JSON.parse(JSON.stringify(idlParsed));
+      
+      // Ensure metadata exists and address is set as a string (not PublicKey object)
+      if (!cleanIdl.metadata) {
+        cleanIdl.metadata = {};
+      }
+      
+      // Always set address as a string to avoid any PublicKey object issues
+      cleanIdl.metadata.address = programIdString;
+      
+      // Validate that the address is a string
+      if (typeof cleanIdl.metadata.address !== 'string') {
+        throw new Error(
+          `IDL metadata.address must be a string, got: ${typeof cleanIdl.metadata.address}`
+        );
       }
       
       // Validate that the address matches our expected programId
-      if (idlParsed.metadata.address !== programIdString) {
+      if (cleanIdl.metadata.address !== programIdString) {
         console.warn(
-          `IDL metadata address (${idlParsed.metadata.address}) doesn't match expected program ID (${programIdString}). ` +
+          `IDL metadata address (${cleanIdl.metadata.address}) doesn't match expected program ID (${programIdString}). ` +
           `Updating IDL metadata to use expected program ID.`
         );
-        idlParsed.metadata.address = programIdString;
+        cleanIdl.metadata.address = programIdString;
       }
       
-      this.program = new Program(idlParsed, this.provider) as Program<Idl>;
+      // Use two-parameter version: Program(idl, provider)
+      // Anchor will extract programId from metadata.address
+      // By ensuring metadata.address is a clean string, we avoid "_bn" errors
+      this.program = new Program(cleanIdl, this.provider) as Program<Idl>;
       
       // Verify the program ID matches what we expect
       const actualProgramId = this.program.programId.toString();
