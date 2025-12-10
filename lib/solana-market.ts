@@ -29,7 +29,22 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
     throw new Error('Provider must have a publicKey')
   }
   
-  const publicKey = new PublicKey(provider.publicKey.toString())
+  // Handle both PublicKey objects and string representations
+  let publicKey: PublicKey
+  if (provider.publicKey instanceof PublicKey) {
+    publicKey = provider.publicKey
+  } else {
+    try {
+      publicKey = new PublicKey(provider.publicKey.toString())
+    } catch (error) {
+      throw new Error(`Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  
+  // Validate publicKey is properly initialized
+  if (!publicKey || !publicKey.toBuffer) {
+    throw new Error('PublicKey is not properly initialized')
+  }
   
   // Create a wallet object compatible with Anchor
   // Anchor Wallet interface requires publicKey, signTransaction, and signAllTransactions

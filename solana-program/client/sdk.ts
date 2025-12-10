@@ -87,6 +87,16 @@ export class PredictDuelClient {
       throw new Error('Program ID is required');
     }
     
+    // Validate wallet publicKey is a PublicKey instance before creating provider
+    if (!(wallet.publicKey instanceof PublicKey)) {
+      throw new Error('Wallet publicKey must be a PublicKey instance');
+    }
+    
+    // Validate publicKey has the required methods
+    if (!wallet.publicKey.toBuffer || typeof wallet.publicKey.toBuffer !== 'function') {
+      throw new Error('Wallet publicKey is not properly initialized (missing toBuffer method)');
+    }
+    
     this.provider = new AnchorProvider(
       connection,
       wallet,
@@ -96,6 +106,11 @@ export class PredictDuelClient {
     // Validate provider was created successfully
     if (!this.provider || !this.provider.wallet) {
       throw new Error('Failed to create AnchorProvider');
+    }
+    
+    // Validate provider wallet publicKey is still a PublicKey after provider creation
+    if (!(this.provider.wallet.publicKey instanceof PublicKey)) {
+      throw new Error('Provider wallet publicKey is not a PublicKey instance after provider creation');
     }
     
     // Load IDL - support both Node.js (require) and browser (fetch/import) environments
@@ -117,11 +132,16 @@ export class PredictDuelClient {
       }
     }
     
-    // Parse IDL - handle both string and object formats
-    // Use the same approach as the test files for consistency
-    const idlParsed: any = typeof idlRaw === 'string' 
-      ? JSON.parse(idlRaw) 
-      : JSON.parse(JSON.stringify(idlRaw));
+    // Parse IDL - avoid unnecessary stringify/parse if already an object
+    let idlParsed: any;
+    if (typeof idlRaw === 'string') {
+      idlParsed = JSON.parse(idlRaw);
+    } else if (idlRaw && typeof idlRaw === 'object') {
+      // Already an object, use it directly (but ensure it's a clean copy)
+      idlParsed = JSON.parse(JSON.stringify(idlRaw));
+    } else {
+      throw new Error('IDL must be a string or object');
+    }
     
     // Ensure metadata exists with address (Anchor expects this)
     if (!idlParsed.metadata) {
@@ -130,6 +150,22 @@ export class PredictDuelClient {
     // Set address as string (not PublicKey object) - this is what Anchor expects
     const programIdString = programId.toString();
     idlParsed.metadata.address = programIdString;
+    
+    // Validate that provider.wallet.publicKey is properly initialized
+    if (!this.provider.wallet?.publicKey) {
+      throw new Error('Provider wallet publicKey is not initialized');
+    }
+    
+    // Ensure programId is a valid PublicKey object
+    if (!(programId instanceof PublicKey)) {
+      throw new Error('Program ID must be a PublicKey instance');
+    }
+    
+    // Validate provider wallet publicKey is a PublicKey instance
+    const walletPubkey = this.provider.wallet.publicKey;
+    if (!(walletPubkey instanceof PublicKey)) {
+      throw new Error('Provider wallet publicKey must be a PublicKey instance');
+    }
     
     // Create Program instance using two-parameter version (matches test file approach)
     // Anchor extracts programId from metadata.address
@@ -151,6 +187,9 @@ export class PredictDuelClient {
       console.error('IDL metadata:', idlParsed.metadata);
       console.error('Program ID:', programIdString);
       console.error('Provider wallet publicKey:', this.provider.wallet?.publicKey?.toString());
+      console.error('Provider wallet type:', typeof this.provider.wallet);
+      console.error('Wallet publicKey type:', walletPubkey instanceof PublicKey);
+      console.error('ProgramId type:', programId instanceof PublicKey);
       throw new Error(
         `Failed to initialize PredictDuel program: ${err instanceof Error ? err.message : String(err)}. ` +
         `Make sure the program ID ${programIdString} matches the deployed program and the IDL is valid. ` +
