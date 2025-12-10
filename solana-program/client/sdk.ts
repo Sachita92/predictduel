@@ -73,11 +73,30 @@ export class PredictDuelClient {
     programId: PublicKey,
     idl?: any // Optional: pass IDL directly for browser compatibility
   ) {
+    // Validate inputs
+    if (!connection) {
+      throw new Error('Connection is required');
+    }
+    if (!wallet) {
+      throw new Error('Wallet is required');
+    }
+    if (!wallet.publicKey) {
+      throw new Error('Wallet must have a publicKey');
+    }
+    if (!programId) {
+      throw new Error('Program ID is required');
+    }
+    
     this.provider = new AnchorProvider(
       connection,
       wallet,
       AnchorProvider.defaultOptions()
     );
+    
+    // Validate provider was created successfully
+    if (!this.provider || !this.provider.wallet) {
+      throw new Error('Failed to create AnchorProvider');
+    }
     
     // Load IDL - support both Node.js (require) and browser (fetch/import) environments
     let idlRaw: any;
@@ -98,24 +117,45 @@ export class PredictDuelClient {
       }
     }
     
+    // Parse IDL - handle both string and object formats
+    // Use the same approach as the test files for consistency
     const idlParsed: any = typeof idlRaw === 'string' 
       ? JSON.parse(idlRaw) 
       : JSON.parse(JSON.stringify(idlRaw));
     
-    // Ensure metadata exists with address
+    // Ensure metadata exists with address (Anchor expects this)
     if (!idlParsed.metadata) {
-      idlParsed.metadata = { address: programId.toString() };
-    } else if (!idlParsed.metadata.address) {
-      idlParsed.metadata.address = programId.toString();
+      idlParsed.metadata = {};
     }
+    // Set address as string (not PublicKey object) - this is what Anchor expects
+    const programIdString = programId.toString();
+    idlParsed.metadata.address = programIdString;
     
-    // Create Program instance - try three-parameter version first, fallback to two-parameter
+    // Create Program instance using two-parameter version (matches test file approach)
+    // Anchor extracts programId from metadata.address
     try {
-      // @ts-ignore - TypeScript doesn't recognize this overload but it works at runtime
-      this.program = new Program(idlParsed, programId, this.provider) as Program<Idl>;
-    } catch (err) {
-      // Fallback: use two-parameter version (Anchor extracts programId from metadata)
       this.program = new Program(idlParsed, this.provider) as Program<Idl>;
+      
+      // Verify the program ID matches what we expect
+      const actualProgramId = this.program.programId.toString();
+      if (actualProgramId !== programIdString) {
+        console.warn(
+          `Program ID mismatch: expected ${programIdString}, got ${actualProgramId}. ` +
+          `Using program ID from IDL metadata (${actualProgramId}).`
+        );
+        // Update to use the actual program ID from the IDL
+        // This can happen if the IDL was generated with a different program ID
+      }
+    } catch (err) {
+      console.error('Error creating Program:', err);
+      console.error('IDL metadata:', idlParsed.metadata);
+      console.error('Program ID:', programIdString);
+      console.error('Provider wallet publicKey:', this.provider.wallet?.publicKey?.toString());
+      throw new Error(
+        `Failed to initialize PredictDuel program: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Make sure the program ID ${programIdString} matches the deployed program and the IDL is valid. ` +
+        `Also ensure the wallet provider is properly connected.`
+      );
     }
   }
 

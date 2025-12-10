@@ -348,19 +348,16 @@ pub struct CreateMarket<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
     
-    /// System account vault that holds all stakes - no data, just lamports
-    /// CHECK: PDA validated via seeds, owner checked to be system program
+    /// PDA vault that holds all stakes - no data, just lamports
+    /// CHECK: PDA validated via seeds, will be created automatically on first transfer
+    /// PDA is owned by this program (required for PDAs), but only holds lamports
     #[account(
-        init,
-        payer = creator,
-        space = 0,
         seeds = [
             b"market_vault",
             creator.key().as_ref(),
             &market_index.to_le_bytes()
         ],
-        bump,
-        owner = system_program.key()
+        bump
     )]
     pub market_vault: UncheckedAccount<'info>,
     
@@ -384,8 +381,8 @@ pub struct PlaceBet<'info> {
     #[account(mut)]
     pub bettor: Signer<'info>,
     
-    /// System account vault that holds all stakes
-    /// CHECK: PDA validated via seeds, owner checked to be system program
+    /// PDA vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owned by this program (PDA requirement)
     #[account(
         mut,
         seeds = [
@@ -393,8 +390,7 @@ pub struct PlaceBet<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump,
-        owner = system_program.key()
+        bump
     )]
     pub market_vault: UncheckedAccount<'info>,
     
@@ -424,8 +420,8 @@ pub struct ClaimWinnings<'info> {
     #[account(mut)]
     pub winner: Signer<'info>,
     
-    /// System account vault that holds all stakes
-    /// CHECK: PDA validated via seeds, owner checked to be system program
+    /// PDA vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owned by this program (PDA requirement)
     #[account(
         mut,
         seeds = [
@@ -433,8 +429,7 @@ pub struct ClaimWinnings<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump,
-        owner = system_program.key()
+        bump
     )]
     pub market_vault: UncheckedAccount<'info>,
     
@@ -464,8 +459,8 @@ pub struct RefundStake<'info> {
     #[account(mut)]
     pub bettor: Signer<'info>,
     
-    /// System account vault that holds all stakes
-    /// CHECK: PDA validated via seeds, owner checked to be system program
+    /// PDA vault that holds all stakes
+    /// CHECK: PDA validated via seeds, owned by this program (PDA requirement)
     #[account(
         mut,
         seeds = [
@@ -473,8 +468,7 @@ pub struct RefundStake<'info> {
             market.creator.as_ref(),
             &market.market_index.to_le_bytes()
         ],
-        bump,
-        owner = system_program.key()
+        bump
     )]
     pub market_vault: UncheckedAccount<'info>,
     

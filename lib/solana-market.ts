@@ -25,20 +25,31 @@ const RPC_ENDPOINT = 'https://api.devnet.solana.com'
  * Note: This creates a wallet adapter that works with Anchor
  */
 export function createAnchorWallet(provider: any): anchor.Wallet {
+  if (!provider || !provider.publicKey) {
+    throw new Error('Provider must have a publicKey')
+  }
+  
   const publicKey = new PublicKey(provider.publicKey.toString())
   
   // Create a wallet object compatible with Anchor
-  // The payer property might not be strictly needed for signing, but TypeScript requires it
+  // Anchor Wallet interface requires publicKey, signTransaction, and signAllTransactions
+  // In browser environments, we don't have access to the secret key, so payer is not set
   const wallet = {
     publicKey,
     signTransaction: async <T extends anchor.web3.Transaction | anchor.web3.VersionedTransaction>(
       tx: T
     ): Promise<T> => {
+      if (!provider.signTransaction) {
+        throw new Error('Provider does not support signTransaction')
+      }
       return await provider.signTransaction(tx) as T
     },
     signAllTransactions: async <T extends anchor.web3.Transaction | anchor.web3.VersionedTransaction>(
       txs: T[]
     ): Promise<T[]> => {
+      if (!provider.signAllTransactions) {
+        throw new Error('Provider does not support signAllTransactions')
+      }
       return await provider.signAllTransactions(txs) as T[]
     },
   } as anchor.Wallet
