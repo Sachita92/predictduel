@@ -29,22 +29,33 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
     throw new Error('Provider must have a publicKey')
   }
   
+  // Debug logging
+  console.log('createAnchorWallet - provider.publicKey type:', typeof provider.publicKey)
+  console.log('createAnchorWallet - provider.publicKey instanceof PublicKey:', provider.publicKey instanceof PublicKey)
+  console.log('createAnchorWallet - provider.publicKey value:', provider.publicKey?.toString?.() || provider.publicKey)
+  
   // Handle both PublicKey objects and string representations
+  // Always convert to a new PublicKey instance to ensure it's from the correct module
   let publicKey: PublicKey
-  if (provider.publicKey instanceof PublicKey) {
-    publicKey = provider.publicKey
-  } else {
-    try {
+  try {
+    if (provider.publicKey instanceof PublicKey) {
+      // Even if it's already a PublicKey, create a new instance to ensure module consistency
       publicKey = new PublicKey(provider.publicKey.toString())
-    } catch (error) {
-      throw new Error(`Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}`)
+    } else {
+      publicKey = new PublicKey(provider.publicKey.toString())
     }
+  } catch (error) {
+    console.error('Error creating PublicKey:', error)
+    throw new Error(`Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}`)
   }
   
   // Validate publicKey is properly initialized
   if (!publicKey || !publicKey.toBuffer) {
     throw new Error('PublicKey is not properly initialized')
   }
+  
+  console.log('createAnchorWallet - created publicKey type:', typeof publicKey)
+  console.log('createAnchorWallet - created publicKey instanceof PublicKey:', publicKey instanceof PublicKey)
   
   // Create a wallet object compatible with Anchor
   // Anchor Wallet interface requires publicKey, signTransaction, and signAllTransactions

@@ -87,19 +87,47 @@ export class PredictDuelClient {
       throw new Error('Program ID is required');
     }
     
-    // Validate wallet publicKey is a PublicKey instance before creating provider
-    if (!(wallet.publicKey instanceof PublicKey)) {
-      throw new Error('Wallet publicKey must be a PublicKey instance');
+    // Validate and normalize wallet publicKey - ensure it's a PublicKey instance
+    // This handles cases where the publicKey might be from a different module instance
+    let normalizedPublicKey: PublicKey;
+    const inputPubkey = wallet.publicKey as any; // Use 'as any' to handle type checking issues
+    
+    if (inputPubkey instanceof PublicKey) {
+      // Even if it's already a PublicKey, create a new instance to ensure module consistency
+      normalizedPublicKey = new PublicKey(inputPubkey.toString());
+    } else if (inputPubkey && typeof inputPubkey.toString === 'function') {
+      // Try to convert to PublicKey if it's not already one
+      try {
+        normalizedPublicKey = new PublicKey(inputPubkey.toString());
+      } catch (error) {
+        throw new Error(
+          `Wallet publicKey must be a PublicKey instance. Got: ${typeof inputPubkey}, value: ${inputPubkey}. ` +
+          `Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    } else {
+      throw new Error(
+        `Wallet publicKey is invalid. Expected PublicKey instance, got: ${typeof inputPubkey}, value: ${inputPubkey}`
+      );
     }
     
     // Validate publicKey has the required methods
-    if (!wallet.publicKey.toBuffer || typeof wallet.publicKey.toBuffer !== 'function') {
+    if (!normalizedPublicKey.toBuffer || typeof normalizedPublicKey.toBuffer !== 'function') {
       throw new Error('Wallet publicKey is not properly initialized (missing toBuffer method)');
     }
     
+    // Create a new wallet object with normalized publicKey to ensure consistency
+    // We can't modify the read-only property, so we create a new wallet object
+    // Note: payer is optional in browser environments
+    const normalizedWallet = {
+      publicKey: normalizedPublicKey,
+      signTransaction: wallet.signTransaction,
+      signAllTransactions: wallet.signAllTransactions,
+    } as anchor.Wallet;
+    
     this.provider = new AnchorProvider(
       connection,
-      wallet,
+      normalizedWallet,
       AnchorProvider.defaultOptions()
     );
     
