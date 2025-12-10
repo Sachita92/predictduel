@@ -183,12 +183,33 @@ export class PredictDuelClient {
     // Parse IDL - avoid unnecessary stringify/parse if already an object
     let idlParsed: any;
     if (typeof idlRaw === 'string') {
-      idlParsed = JSON.parse(idlRaw);
+      try {
+        idlParsed = JSON.parse(idlRaw);
+      } catch (parseError) {
+        throw new Error(
+          `Failed to parse IDL as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+        );
+      }
     } else if (idlRaw && typeof idlRaw === 'object') {
       // Already an object, use it directly (but ensure it's a clean copy)
-      idlParsed = JSON.parse(JSON.stringify(idlRaw));
+      try {
+        idlParsed = JSON.parse(JSON.stringify(idlRaw));
+      } catch (stringifyError) {
+        throw new Error(
+          `Failed to serialize IDL: ${stringifyError instanceof Error ? stringifyError.message : String(stringifyError)}`
+        );
+      }
     } else {
-      throw new Error('IDL must be a string or object');
+      throw new Error(`IDL must be a string or object, got: ${typeof idlRaw}`);
+    }
+    
+    // Validate IDL has required structure
+    if (!idlParsed || typeof idlParsed !== 'object') {
+      throw new Error('IDL must be a valid object');
+    }
+    
+    if (!idlParsed.version && !idlParsed.name) {
+      console.warn('IDL appears to be missing version or name field - this may cause issues');
     }
     
     // Ensure metadata exists with address (Anchor expects this)
@@ -199,6 +220,29 @@ export class PredictDuelClient {
     // Use normalized programId to ensure consistency
     const programIdString = normalizedProgramId.toString();
     idlParsed.metadata.address = programIdString;
+    
+    // Validate metadata.address is set correctly
+    if (!idlParsed.metadata.address || typeof idlParsed.metadata.address !== 'string') {
+      throw new Error(
+        `Failed to set IDL metadata.address. Expected string, got: ${typeof idlParsed.metadata.address}. ` +
+        `Program ID: ${programIdString}`
+      );
+    }
+    
+    // Ensure the address matches our expected programId
+    if (idlParsed.metadata.address !== programIdString) {
+      throw new Error(
+        `IDL metadata.address (${idlParsed.metadata.address}) doesn't match expected program ID (${programIdString})`
+      );
+    }
+    
+    // Some IDL formats also have programId at root level - ensure it matches if present
+    if (idlParsed.programId && idlParsed.programId !== programIdString) {
+      console.warn(
+        `IDL has programId at root level (${idlParsed.programId}) that doesn't match expected (${programIdString}). ` +
+        `Anchor will use metadata.address instead.`
+      );
+    }
     
     // Validate that provider.wallet.publicKey is properly initialized
     if (!this.provider.wallet?.publicKey) {
@@ -211,9 +255,34 @@ export class PredictDuelClient {
       throw new Error('Provider wallet publicKey must be a PublicKey instance');
     }
     
+    // Validate provider connection is properly initialized
+    if (!this.provider.connection) {
+      throw new Error('Provider connection is not initialized');
+    }
+    
+    // Validate provider connection is a Connection instance
+    if (!(this.provider.connection instanceof Connection)) {
+      throw new Error('Provider connection must be a Connection instance');
+    }
+    
     // Create Program instance using two-parameter version (matches test file approach)
     // Anchor extracts programId from metadata.address
+    // Ensure the address is set as a string to avoid any serialization issues
     try {
+      // Double-check that metadata.address is set correctly as a string
+      if (!idlParsed.metadata.address || typeof idlParsed.metadata.address !== 'string') {
+        idlParsed.metadata.address = programIdString;
+      }
+      
+      // Validate that the address matches our expected programId
+      if (idlParsed.metadata.address !== programIdString) {
+        console.warn(
+          `IDL metadata address (${idlParsed.metadata.address}) doesn't match expected program ID (${programIdString}). ` +
+          `Updating IDL metadata to use expected program ID.`
+        );
+        idlParsed.metadata.address = programIdString;
+      }
+      
       this.program = new Program(idlParsed, this.provider) as Program<Idl>;
       
       // Verify the program ID matches what we expect
@@ -226,14 +295,24 @@ export class PredictDuelClient {
         // Update to use the actual program ID from the IDL
         // This can happen if the IDL was generated with a different program ID
       }
+      
+      // Verify that program.programId is a valid PublicKey instance
+      if (!this.program.programId || !(this.program.programId instanceof PublicKey)) {
+        throw new Error(
+          `Program ID is not a valid PublicKey instance. ` +
+          `Got: ${typeof this.program.programId}, value: ${this.program.programId}`
+        );
+      }
     } catch (err) {
       console.error('Error creating Program:', err);
       console.error('IDL metadata:', idlParsed.metadata);
-      console.error('Program ID:', programIdString);
+      console.error('Program ID string:', programIdString);
+      console.error('Normalized ProgramId type:', normalizedProgramId instanceof PublicKey);
+      console.error('Normalized ProgramId value:', normalizedProgramId.toString());
+      console.error('Original ProgramId type:', programId instanceof PublicKey);
       console.error('Provider wallet publicKey:', this.provider.wallet?.publicKey?.toString());
       console.error('Provider wallet type:', typeof this.provider.wallet);
       console.error('Wallet publicKey type:', walletPubkey instanceof PublicKey);
-      console.error('ProgramId type:', programId instanceof PublicKey);
       throw new Error(
         `Failed to initialize PredictDuel program: ${err instanceof Error ? err.message : String(err)}. ` +
         `Make sure the program ID ${programIdString} matches the deployed program and the IDL is valid. ` +
