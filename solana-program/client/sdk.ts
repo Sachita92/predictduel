@@ -157,8 +157,13 @@ export class PredictDuelClient {
     }
     
     // Validate provider wallet publicKey is still a PublicKey after provider creation
-    if (!(this.provider.wallet.publicKey instanceof PublicKey)) {
-      throw new Error('Provider wallet publicKey is not a PublicKey instance after provider creation');
+    // Use method-based check to avoid module bundling issues
+    const providerPubkey = this.provider.wallet.publicKey as any;
+    if (!providerPubkey || !providerPubkey.toBuffer || typeof providerPubkey.toBuffer !== 'function') {
+      throw new Error(
+        'Provider wallet publicKey is not a valid PublicKey instance after provider creation. ' +
+        `Missing toBuffer method. Type: ${typeof providerPubkey}`
+      );
     }
     
     // Load IDL - support both Node.js (require) and browser (fetch/import) environments
@@ -250,9 +255,13 @@ export class PredictDuelClient {
     }
     
     // Validate provider wallet publicKey is a PublicKey instance
-    const walletPubkey = this.provider.wallet.publicKey;
-    if (!(walletPubkey instanceof PublicKey)) {
-      throw new Error('Provider wallet publicKey must be a PublicKey instance');
+    // Use method-based check to avoid module bundling issues
+    const walletPubkey = this.provider.wallet.publicKey as any;
+    if (!walletPubkey || !walletPubkey.toBuffer || typeof walletPubkey.toBuffer !== 'function') {
+      throw new Error(
+        'Provider wallet publicKey must be a valid PublicKey instance. ' +
+        `Missing toBuffer method. Type: ${typeof walletPubkey}`
+      );
     }
     
     // Validate provider connection is properly initialized
@@ -260,9 +269,16 @@ export class PredictDuelClient {
       throw new Error('Provider connection is not initialized');
     }
     
-    // Validate provider connection is a Connection instance
-    if (!(this.provider.connection instanceof Connection)) {
-      throw new Error('Provider connection must be a Connection instance');
+    // Validate provider connection has Connection methods (avoid instanceof due to module bundling)
+    // Check for required Connection methods instead of instanceof
+    const conn = this.provider.connection as any;
+    if (!conn.getAccountInfo || !conn.sendTransaction || !conn.getLatestBlockhash) {
+      throw new Error(
+        'Provider connection must be a Connection instance. ' +
+        `Missing required methods. Has getAccountInfo: ${!!conn.getAccountInfo}, ` +
+        `Has sendTransaction: ${!!conn.sendTransaction}, ` +
+        `Has getLatestBlockhash: ${!!conn.getLatestBlockhash}`
+      );
     }
     
     // Create Program instance using two-parameter version (matches test file approach)
@@ -297,10 +313,12 @@ export class PredictDuelClient {
       }
       
       // Verify that program.programId is a valid PublicKey instance
-      if (!this.program.programId || !(this.program.programId instanceof PublicKey)) {
+      // Use method-based check to avoid module bundling issues
+      const programId = this.program.programId as any;
+      if (!programId || !programId.toBuffer || typeof programId.toBuffer !== 'function') {
         throw new Error(
           `Program ID is not a valid PublicKey instance. ` +
-          `Got: ${typeof this.program.programId}, value: ${this.program.programId}`
+          `Missing toBuffer method. Got: ${typeof programId}, value: ${programId}`
         );
       }
     } catch (err) {
