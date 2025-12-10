@@ -25,28 +25,75 @@ const RPC_ENDPOINT = 'https://api.devnet.solana.com'
  * Note: This creates a wallet adapter that works with Anchor
  */
 export function createAnchorWallet(provider: any): anchor.Wallet {
-  if (!provider || !provider.publicKey) {
-    throw new Error('Provider must have a publicKey')
+  if (!provider) {
+    throw new Error('Provider is required but was not provided')
   }
   
-  // Debug logging
-  console.log('createAnchorWallet - provider.publicKey type:', typeof provider.publicKey)
-  console.log('createAnchorWallet - provider.publicKey instanceof PublicKey:', provider.publicKey instanceof PublicKey)
-  console.log('createAnchorWallet - provider.publicKey value:', provider.publicKey?.toString?.() || provider.publicKey)
+  if (!provider.publicKey) {
+    throw new Error(
+      'Wallet provider does not have a publicKey. ' +
+      'This usually means the wallet is not connected. ' +
+      'Please connect your Solana wallet (Phantom, Solflare, etc.) and try again.'
+    )
+  }
+  
+  // Debug logging - detailed information about the provider
+  console.log('🔍 createAnchorWallet Debug:')
+  console.log('  provider type:', typeof provider)
+  console.log('  provider.publicKey type:', typeof provider.publicKey)
+  console.log('  provider.publicKey instanceof PublicKey:', provider.publicKey instanceof PublicKey)
+  console.log('  provider.publicKey value:', provider.publicKey?.toString?.() || provider.publicKey)
+  console.log('  provider.publicKey constructor:', provider.publicKey?.constructor?.name)
+  console.log('  provider.isConnected:', provider.isConnected)
+  console.log('  provider.isPhantom:', provider.isPhantom)
+  
+  // Check if publicKey looks like a valid Solana address
+  const pubkeyStr = provider.publicKey?.toString?.() || String(provider.publicKey || '')
+  if (pubkeyStr && pubkeyStr.length > 0) {
+    if (pubkeyStr.startsWith('0x')) {
+      console.error('❌ ERROR: This looks like an Ethereum address (starts with 0x), not Solana!')
+      throw new Error(
+        'Wallet address appears to be an Ethereum address (0x...), but Solana is required. ' +
+        'Please make sure your Phantom wallet is set to Solana network, not Ethereum.'
+      )
+    }
+    if (pubkeyStr.length < 32 || pubkeyStr.length > 44) {
+      console.warn('⚠️ WARNING: PublicKey length is unusual for Solana:', pubkeyStr.length)
+    }
+  }
   
   // Handle both PublicKey objects and string representations
   // Always convert to a new PublicKey instance to ensure it's from the correct module
   let publicKey: PublicKey
   try {
-    if (provider.publicKey instanceof PublicKey) {
-      // Even if it's already a PublicKey, create a new instance to ensure module consistency
-      publicKey = new PublicKey(provider.publicKey.toString())
+    // Get the string representation of the publicKey
+    let publicKeyString: string
+    if (typeof provider.publicKey === 'string') {
+      publicKeyString = provider.publicKey
+    } else if (provider.publicKey && typeof provider.publicKey.toString === 'function') {
+      publicKeyString = provider.publicKey.toString()
     } else {
-      publicKey = new PublicKey(provider.publicKey.toString())
+      throw new Error(`Cannot convert publicKey to string. Type: ${typeof provider.publicKey}, value: ${provider.publicKey}`)
     }
+    
+    // Validate the string is not empty
+    if (!publicKeyString || publicKeyString.trim().length === 0) {
+      throw new Error('publicKey string is empty')
+    }
+    
+    // Create new PublicKey instance
+    publicKey = new PublicKey(publicKeyString)
   } catch (error) {
     console.error('Error creating PublicKey:', error)
-    throw new Error(`Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}`)
+    console.error('Provider publicKey details:', {
+      type: typeof provider.publicKey,
+      value: provider.publicKey,
+      hasToString: typeof provider.publicKey?.toString === 'function',
+    })
+    throw new Error(
+      `Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}. ` +
+      `Please ensure your wallet is properly connected and try again.`
+    )
   }
   
   // Validate publicKey is properly initialized

@@ -87,6 +87,26 @@ export class PredictDuelClient {
       throw new Error('Program ID is required');
     }
     
+    // Normalize programId - always create a new PublicKey instance to ensure module consistency
+    // This handles cases where programId might be from a different module instance
+    let normalizedProgramId: PublicKey;
+    try {
+      const programIdString = typeof programId === 'string' 
+        ? programId 
+        : (programId as any)?.toString?.() || String(programId);
+      
+      if (!programIdString || programIdString.trim().length === 0) {
+        throw new Error('Program ID string is empty');
+      }
+      
+      normalizedProgramId = new PublicKey(programIdString);
+    } catch (error) {
+      throw new Error(
+        `Invalid program ID format: ${error instanceof Error ? error.message : String(error)}. ` +
+        `Expected a PublicKey instance or valid Solana address string.`
+      );
+    }
+    
     // Validate and normalize wallet publicKey - ensure it's a PublicKey instance
     // This handles cases where the publicKey might be from a different module instance
     let normalizedPublicKey: PublicKey;
@@ -176,17 +196,13 @@ export class PredictDuelClient {
       idlParsed.metadata = {};
     }
     // Set address as string (not PublicKey object) - this is what Anchor expects
-    const programIdString = programId.toString();
+    // Use normalized programId to ensure consistency
+    const programIdString = normalizedProgramId.toString();
     idlParsed.metadata.address = programIdString;
     
     // Validate that provider.wallet.publicKey is properly initialized
     if (!this.provider.wallet?.publicKey) {
       throw new Error('Provider wallet publicKey is not initialized');
-    }
-    
-    // Ensure programId is a valid PublicKey object
-    if (!(programId instanceof PublicKey)) {
-      throw new Error('Program ID must be a PublicKey instance');
     }
     
     // Validate provider wallet publicKey is a PublicKey instance

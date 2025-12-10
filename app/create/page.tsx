@@ -121,15 +121,34 @@ export default function CreatePage() {
       if (typeof window !== 'undefined' && (window as any).solana) {
         const provider = (window as any).solana
         if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          // Check if already connected with publicKey
           if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            // Try to connect
-            try {
-              await provider.connect()
+            // Verify publicKey is valid
+            if (provider.publicKey.toString && provider.publicKey.toString().length > 0) {
               solanaProvider = provider
+            }
+          }
+          
+          // If not connected or publicKey is missing, try to connect
+          if (!solanaProvider) {
+            try {
+              const response = await provider.connect()
+              // After connect, publicKey should be available
+              // Wait a moment for it to be set
+              await new Promise(resolve => setTimeout(resolve, 100))
+              
+              // Verify publicKey is now available
+              if (provider.publicKey && provider.publicKey.toString && provider.publicKey.toString().length > 0) {
+                solanaProvider = provider
+              } else {
+                throw new Error('Wallet connected but publicKey is not available')
+              }
             } catch (connectError) {
               console.error('Failed to connect wallet:', connectError)
+              throw new Error(
+                `Failed to connect Solana wallet: ${connectError instanceof Error ? connectError.message : String(connectError)}. ` +
+                `Please make sure your wallet is unlocked and try again.`
+              )
             }
           }
         }
@@ -147,12 +166,43 @@ export default function CreatePage() {
         // Note: Privy's wallet structure may need different access
         // This is a placeholder - you may need to adjust based on Privy's actual API
         if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
-          solanaProvider = (window as any).solana
+          const provider = (window as any).solana
+          if (provider.publicKey && provider.publicKey.toString && provider.publicKey.toString().length > 0) {
+            solanaProvider = provider
+          }
         }
       }
       
       if (!solanaProvider) {
         throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Final validation: ensure publicKey exists
+      if (!solanaProvider.publicKey) {
+        throw new Error('Wallet provider does not have a publicKey. Please connect your wallet and try again.')
+      }
+      
+      // Log for debugging
+      console.log('🔍 Wallet Debug Information:')
+      console.log('Using Solana provider:', {
+        isPhantom: solanaProvider.isPhantom,
+        isConnected: solanaProvider.isConnected,
+        publicKey: solanaProvider.publicKey?.toString?.() || 'null',
+        publicKeyType: typeof solanaProvider.publicKey,
+        publicKeyInstance: solanaProvider.publicKey,
+      })
+      console.log('Privy wallet address:', walletAddress)
+      console.log('Provider publicKey matches Privy?', 
+        solanaProvider.publicKey?.toString?.() === walletAddress ? '✅ YES' : '❌ NO - MISMATCH!'
+      )
+      
+      // Verify the wallet address matches
+      const providerPubkeyStr = solanaProvider.publicKey?.toString?.()
+      if (walletAddress && providerPubkeyStr && providerPubkeyStr !== walletAddress) {
+        console.warn('⚠️ WARNING: Wallet address mismatch!')
+        console.warn('  Privy address:', walletAddress)
+        console.warn('  Provider address:', providerPubkeyStr)
+        console.warn('  This might cause issues. Using provider address for on-chain operations.')
       }
       
       // Step 5: Create market on-chain (user will sign transaction)
