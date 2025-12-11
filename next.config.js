@@ -29,6 +29,20 @@ const nextConfig = {
       })
     );
 
+    // Ignore solana-program test files
+    config.plugins.push(
+      new IgnorePlugin({
+        resourceRegExp: /solana-program[\\/]tests/,
+      })
+    );
+
+    // Ignore solana-program example files
+    config.plugins.push(
+      new IgnorePlugin({
+        resourceRegExp: /solana-program[\\/]client[\\/]example-integration\.ts$/,
+      })
+    );
+
     // Replace the IDL require with an empty module for browser builds
     if (!isServer) {
       config.plugins.push(

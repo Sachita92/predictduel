@@ -36,6 +36,13 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "solana-program/node_modules",
+    "solana-program/target",
+    "solana-program/tests/**/*",
+    "solana-program/programs/**/*",
+    "solana-program/client/example-integration.ts",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
