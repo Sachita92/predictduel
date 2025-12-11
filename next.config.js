@@ -2,6 +2,29 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://auth.privy.io",
+              "style-src 'self' 'unsafe-inline' https://auth.privy.io",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io",
+              "frame-src 'self' https://auth.privy.io",
+              "frame-ancestors 'self' https://auth.privy.io",
+            ].join('; '),
+          },
+        ],
+      },
+    ]
+  },
+
   webpack: (config, { isServer }) => {
     const { IgnorePlugin, NormalModuleReplacementPlugin } = require('webpack');
 
