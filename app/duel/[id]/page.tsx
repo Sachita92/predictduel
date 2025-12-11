@@ -52,7 +52,7 @@ interface Duel {
   createdAt: string
 }
 
-export default function DuelDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+export default function DuelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { ready, authenticated, user } = usePrivy()
   const { wallets } = useWallets()
@@ -123,14 +123,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   // Removed debug logging useEffect to reduce re-renders
   
   useEffect(() => {
-    // Handle both sync and async params (Next.js 14 vs 15)
-    if (typeof params === 'object' && 'then' in params) {
-      params.then((resolvedParams) => {
-        setId(resolvedParams.id)
-      })
-    } else {
-      setId(params.id)
-    }
+    // Resolve params (Next.js 16+ uses Promise)
+    params.then((resolvedParams) => {
+      setId(resolvedParams.id)
+    })
   }, [params])
   
   useEffect(() => {
