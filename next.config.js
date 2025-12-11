@@ -2,9 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Disable Turbopack
-  turbopack: false,
-
   webpack: (config, { isServer }) => {
     const { IgnorePlugin, NormalModuleReplacementPlugin } = require('webpack');
 
