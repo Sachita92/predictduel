@@ -229,6 +229,15 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     router.push(`/profile?privyId=${user.privyId}`)
   }
 
+  const handleRemoveRecentSearch = (searchToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent triggering the search click
+    const updated = recentSearches.filter(s => s !== searchToRemove)
+    setRecentSearches(updated)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated))
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -418,13 +427,24 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                   <div className="flex flex-wrap gap-2">
                     {recentSearches.length > 0 ? (
                       recentSearches.map((search, index) => (
-                        <button
+                        <div
                           key={index}
-                          onClick={() => handleSearchClick(search)}
-                          className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors"
+                          className="group relative inline-flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors"
                         >
-                          {search}
-                        </button>
+                          <button
+                            onClick={() => handleSearchClick(search)}
+                            className="flex-1 text-left"
+                          >
+                            {search}
+                          </button>
+                          <button
+                            onClick={(e) => handleRemoveRecentSearch(search, e)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-white/20 rounded"
+                            aria-label="Remove search"
+                          >
+                            <X size={14} className="text-white/60 hover:text-white" />
+                          </button>
+                        </div>
                       ))
                     ) : (
                       <p className="text-sm text-white/40">No recent searches</p>

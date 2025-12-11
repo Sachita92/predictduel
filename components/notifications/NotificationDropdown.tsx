@@ -282,7 +282,13 @@ export default function NotificationDropdown({ isOpen, onClose, onUnreadCountCha
             {/* Footer */}
             {notifications.length > 0 && (
               <div className="p-3 border-t border-white/10 text-center">
-                <button className="text-sm text-primary-from hover:text-primary-to transition-colors">
+                <button
+                  onClick={() => {
+                    router.push('/notifications')
+                    onClose()
+                  }}
+                  className="text-sm text-primary-from hover:text-primary-to transition-colors"
+                >
                   View All Notifications
                 </button>
               </div>

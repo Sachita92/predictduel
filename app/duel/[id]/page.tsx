@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Share2, MessageCircle, Loader2 } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Share2, MessageCircle, Loader2, ArrowLeft, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
@@ -16,7 +15,6 @@ import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
 import { resolveMarketOnChain } from '@/lib/solana-resolve'
 import { claimWinningsOnChain } from '@/lib/solana-claim'
-import { X } from 'lucide-react'
 
 interface Duel {
   id: string
@@ -81,8 +79,8 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [claimTransactionSignature, setClaimTransactionSignature] = useState<string | null>(null)
   
-  const walletAddress = getWalletAddress(user, APP_BLOCKCHAIN)
-  const currency = getAppCurrency()
+  const walletAddress = useMemo(() => getWalletAddress(user, APP_BLOCKCHAIN), [user])
+  const currency = useMemo(() => getAppCurrency(), [])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   
   // Fetch current user's MongoDB ID
@@ -99,40 +97,30 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [user?.id])
   
-  // Get current user's participation
-  const userParticipation = duel?.participants.find(
-    (p) => currentUserId && p.user.id === currentUserId
+  // Memoize expensive calculations
+  const userParticipation = useMemo(() => 
+    duel?.participants.find((p) => currentUserId && p.user.id === currentUserId),
+    [duel?.participants, currentUserId]
   )
   
-  const isCreator = user?.id && duel?.creator.privyId === user.id
-  const hasParticipated = !!userParticipation || hasVoted // Include optimistic state
-  const isDuelActive = duel?.status === 'active' || duel?.status === 'pending'
-  const isDeadlineValid = duel?.deadline && new Date(duel.deadline) > new Date()
-  const canBet = authenticated && !isCreator && !hasParticipated && isDuelActive && isDeadlineValid
+  const isCreator = useMemo(() => user?.id && duel?.creator.privyId === user.id, [user?.id, duel?.creator.privyId])
+  const hasParticipated = useMemo(() => !!userParticipation || hasVoted, [userParticipation, hasVoted])
+  const isDuelActive = useMemo(() => duel?.status === 'active' || duel?.status === 'pending', [duel?.status])
+  const isDeadlineValid = useMemo(() => duel?.deadline && new Date(duel.deadline) > new Date(), [duel?.deadline])
+  const canBet = useMemo(() => 
+    authenticated && !isCreator && !hasParticipated && isDuelActive && isDeadlineValid,
+    [authenticated, isCreator, hasParticipated, isDuelActive, isDeadlineValid]
+  )
   
   // Resolution conditions
-  const deadlineDate = duel ? new Date(duel.deadline) : null
-  const isDeadlinePassed = deadlineDate ? new Date() >= deadlineDate : false
-  const canResolve = isCreator && isDeadlinePassed && duel?.status !== 'resolved' && duel?.status !== 'cancelled'
+  const deadlineDate = useMemo(() => duel ? new Date(duel.deadline) : null, [duel?.deadline])
+  const isDeadlinePassed = useMemo(() => deadlineDate ? new Date() >= deadlineDate : false, [deadlineDate])
+  const canResolve = useMemo(() => 
+    isCreator && isDeadlinePassed && duel?.status !== 'resolved' && duel?.status !== 'cancelled',
+    [isCreator, isDeadlinePassed, duel?.status]
+  )
   
-  // Debug logging
-  useEffect(() => {
-    if (duel && user) {
-      console.log('Betting Debug:', {
-        authenticated,
-        isCreator,
-        hasParticipated,
-        isDuelActive,
-        isDeadlineValid,
-        canBet,
-        duelStatus: duel.status,
-        deadline: duel.deadline,
-        currentUserId,
-        userParticipation: userParticipation ? 'found' : 'not found',
-        participants: duel.participants.length
-      })
-    }
-  }, [duel, user, authenticated, isCreator, hasParticipated, isDuelActive, isDeadlineValid, canBet, currentUserId])
+  // Removed debug logging useEffect to reduce re-renders
   
   useEffect(() => {
     // Handle both sync and async params (Next.js 14 vs 15)
@@ -151,13 +139,8 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [ready, authenticated, router])
   
-  useEffect(() => {
-    if (id) {
-      fetchDuel()
-    }
-  }, [id])
-  
-  const fetchDuel = async () => {
+  const fetchDuel = useCallback(async () => {
+    if (!id) return
     try {
       setIsLoading(true)
       const response = await fetch(`/api/duels/${id}`)
@@ -182,9 +165,15 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [id, currentUserId])
   
-  const handleBet = async (prediction: 'yes' | 'no') => {
+  useEffect(() => {
+    if (id) {
+      fetchDuel()
+    }
+  }, [id, fetchDuel])
+  
+  const handleBet = useCallback(async (prediction: 'yes' | 'no') => {
     if (!duel || !user || !walletAddress) {
       setBetError('Please connect your wallet')
       return
@@ -280,9 +269,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsBetting(false)
     }
-  }
+  }, [duel, user, walletAddress, id, betAmount, currentUserId])
   
-  const handleResolve = async (outcome: 'yes' | 'no') => {
+  const handleResolve = useCallback(async (outcome: 'yes' | 'no') => {
     if (!duel || !user || !walletAddress) {
       setResolveError('Please connect your wallet')
       return
@@ -374,9 +363,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsResolving(false)
     }
-  }
+  }, [duel, user, walletAddress, id, wallets])
   
-  const handleClaim = async () => {
+  const handleClaim = useCallback(async () => {
     if (!duel || !user || !walletAddress) {
       setClaimError('Please connect your wallet')
       return
@@ -477,7 +466,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsClaiming(false)
     }
-  }
+  }, [duel, user, walletAddress, userParticipation, id, wallets])
   
   if (!ready || isLoading) {
     return (
@@ -509,20 +498,53 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     )
   }
   
-  const deadline = duel ? new Date(duel.deadline) : new Date()
-  const isExpired = new Date() >= deadline
-  const yesStake = duel?.participants
-    ?.filter(p => p.prediction === 'yes')
-    .reduce((sum, p) => sum + p.stake, 0) || 0
-  const noStake = duel?.participants
-    ?.filter(p => p.prediction === 'no')
-    .reduce((sum, p) => sum + p.stake, 0) || 0
+  const deadline = useMemo(() => duel ? new Date(duel.deadline) : new Date(), [duel?.deadline])
+  const isExpired = useMemo(() => new Date() >= deadline, [deadline])
+  const yesStake = useMemo(() => 
+    duel?.participants
+      ?.filter(p => p.prediction === 'yes')
+      .reduce((sum, p) => sum + p.stake, 0) || 0,
+    [duel?.participants]
+  )
+  const noStake = useMemo(() => 
+    duel?.participants
+      ?.filter(p => p.prediction === 'no')
+      .reduce((sum, p) => sum + p.stake, 0) || 0,
+    [duel?.participants]
+  )
+  
+  const handleYesBet = useCallback(() => {
+    if (canBet && !isBetting) {
+      setSelectedPrediction('yes')
+      handleBet('yes')
+    }
+  }, [canBet, isBetting, handleBet])
+  
+  const handleNoBet = useCallback(() => {
+    if (canBet && !isBetting) {
+      setSelectedPrediction('no')
+      handleBet('no')
+    }
+  }, [canBet, isBetting, handleBet])
   
   return (
     <div className="min-h-screen bg-background-dark pb-20">
       <TopNav />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Back Button */}
+        <div className="mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/duels')}
+            className="text-white/70 hover:text-white hover:bg-white/10"
+          >
+            <ArrowLeft size={18} className="mr-2" />
+            Back to Duels
+          </Button>
+        </div>
+        
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -714,12 +736,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               <button
                 type="button"
                 className="h-20 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                onClick={() => {
-                  if (canBet && !isBetting) {
-                    setSelectedPrediction('yes')
-                    handleBet('yes')
-                  }
-                }}
+                onClick={handleYesBet}
                 disabled={isBetting || !canBet}
               >
                 {isBetting && selectedPrediction === 'yes' ? (
@@ -732,12 +749,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               <button
                 type="button"
                 className="h-20 text-xl font-bold bg-danger hover:bg-red-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                onClick={() => {
-                  if (canBet && !isBetting) {
-                    setSelectedPrediction('no')
-                    handleBet('no')
-                  }
-                }}
+                onClick={handleNoBet}
                 disabled={isBetting || !canBet}
               >
                 {isBetting && selectedPrediction === 'no' ? (
@@ -969,12 +981,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         {/* Resolve Modal */}
         {showResolveModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full"
-            >
+            <div className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-2xl font-bold">Resolve Duel</h3>
                 <button
@@ -1060,7 +1067,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   )}
                 </Button>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
         

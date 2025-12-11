@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import { Search, Bell, Wallet, User } from 'lucide-react'
-import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { usePrivy } from '@privy-io/react-auth'
 import Button from '@/components/ui/Button'
-import SearchModal from '@/components/search/SearchModal'
-import NotificationDropdown from '@/components/notifications/NotificationDropdown'
-import ProfileDropdown from '@/components/user/ProfileDropdown'
+
+// Lazy load heavy modals
+const SearchModal = lazy(() => import('@/components/search/SearchModal'))
+const NotificationDropdown = lazy(() => import('@/components/notifications/NotificationDropdown'))
+const ProfileDropdown = lazy(() => import('@/components/user/ProfileDropdown'))
 
 export default function TopNav() {
   const router = useRouter()
@@ -51,20 +52,16 @@ export default function TopNav() {
           </Link>
           
           <div className="flex items-center gap-4">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+            <button
               onClick={() => setIsSearchOpen(true)}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="p-2 rounded-lg hover:bg-white/10 active:scale-95 transition-all duration-150"
             >
               <Search size={20} className="text-white/80" />
-            </motion.button>
+            </button>
             
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+            <button
               onClick={() => setIsNotificationsOpen(true)}
-              className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="relative p-2 rounded-lg hover:bg-white/10 active:scale-95 transition-all duration-150"
             >
               <Bell size={20} className="text-white/80" />
               {unreadCount > 0 && (
@@ -72,7 +69,7 @@ export default function TopNav() {
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
-            </motion.button>
+            </button>
             
             {ready ? (
               authenticated ? (
@@ -99,13 +96,25 @@ export default function TopNav() {
         </div>
       </nav>
       
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <NotificationDropdown 
-        isOpen={isNotificationsOpen} 
-        onClose={() => setIsNotificationsOpen(false)}
-        onUnreadCountChange={setUnreadCount}
-      />
-      <ProfileDropdown isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      {isSearchOpen && (
+        <Suspense fallback={null}>
+          <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        </Suspense>
+      )}
+      {isNotificationsOpen && (
+        <Suspense fallback={null}>
+          <NotificationDropdown 
+            isOpen={isNotificationsOpen} 
+            onClose={() => setIsNotificationsOpen(false)}
+            onUnreadCountChange={setUnreadCount}
+          />
+        </Suspense>
+      )}
+      {isProfileOpen && (
+        <Suspense fallback={null}>
+          <ProfileDropdown isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+        </Suspense>
+      )}
     </>
   )
 }
