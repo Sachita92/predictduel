@@ -12,10 +12,10 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://auth.privy.io",
-              "style-src 'self' 'unsafe-inline' https://auth.privy.io",
+              "style-src 'self' 'unsafe-inline' https://auth.privy.io https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "connect-src 'self' https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://api.testnet.solana.com https://*.solana.com wss://*.solana.com",
               "frame-src 'self' https://auth.privy.io",
               "frame-ancestors 'self' https://auth.privy.io",
             ].join('; '),
