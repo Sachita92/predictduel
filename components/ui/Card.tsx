@@ -1,10 +1,10 @@
 'use client'
 
-import { HTMLAttributes, ReactNode } from 'react'
+import { ReactNode, ComponentPropsWithoutRef } from 'react'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+interface CardProps extends ComponentPropsWithoutRef<'div'> {
   variant?: 'default' | 'glass' | 'gradient'
   hover?: boolean
   children: ReactNode
@@ -21,12 +21,22 @@ export default function Card({ className, variant = 'default', hover = false, ch
   const baseClassName = cn(variants[variant as keyof typeof variants], className)
   
   if (hover) {
+    // Extract conflicting event handlers to avoid type conflicts with framer-motion
+    const {
+      onAnimationStart,
+      onAnimationEnd,
+      onAnimationIteration,
+      onDragStart,
+      onDragEnd,
+      onDrag,
+      ...restProps
+    } = props
     return (
       <motion.div
         className={baseClassName}
         whileHover={{ scale: 1.02, y: -4 }}
         transition={{ duration: 0.2 }}
-        {...props}
+        {...restProps}
       >
         {children}
       </motion.div>
