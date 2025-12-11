@@ -19,20 +19,27 @@ const RPC_ENDPOINT = 'https://api.devnet.solana.com'
 
 /**
  * Load IDL for browser environment
+ * Uses bundled IDL from lib/idl.ts which is included in the build
  */
 async function loadIDL(): Promise<any> {
   try {
-    const response = await fetch('/idl/predict_duel.json')
-    if (!response.ok) {
-      throw new Error(`Failed to fetch IDL: ${response.status} ${response.statusText}`)
+    // Import the IDL from the bundled module
+    const idlModule = await import('./idl')
+    return idlModule.default
+  } catch (importError) {
+    // Fallback to fetch if import fails
+    try {
+      const response = await fetch('/idl/predict_duel.json')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch IDL: ${response.status} ${response.statusText}`)
+      }
+      return await response.json()
+    } catch (fetchError) {
+      console.error('Failed to load IDL:', { importError, fetchError })
+      throw new Error(
+        'IDL not found. Error: ' + (importError instanceof Error ? importError.message : String(importError))
+      )
     }
-    return await response.json()
-  } catch (fetchError) {
-    console.error('Failed to load IDL:', fetchError)
-    throw new Error(
-      'IDL not found. Please ensure solana-program/target/idl/predict_duel.json exists and ' +
-      'is copied to public/idl/predict_duel.json. Error: ' + (fetchError as Error).message
-    )
   }
 }
 

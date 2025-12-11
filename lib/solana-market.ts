@@ -132,22 +132,30 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
 
 /**
  * Load IDL for browser environment
- * Fetches from public directory (copied during build)
+ * Uses bundled IDL from lib/idl.ts which is included in the build
  */
 async function loadIDL(): Promise<any> {
   try {
-    // Fetch IDL from public directory
-    const response = await fetch('/idl/predict_duel.json')
-    if (!response.ok) {
-      throw new Error(`Failed to fetch IDL: ${response.status} ${response.statusText}`)
+    // Import the IDL from the bundled module
+    // This ensures it's available in production without needing to fetch
+    const idlModule = await import('./idl')
+    return idlModule.default
+  } catch (importError) {
+    // Fallback to fetch if import fails (shouldn't happen, but just in case)
+    try {
+      const response = await fetch('/idl/predict_duel.json')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch IDL: ${response.status} ${response.statusText}`)
+      }
+      return await response.json()
+    } catch (fetchError) {
+      console.error('Failed to load IDL (both import and fetch failed):', { importError, fetchError })
+      throw new Error(
+        'IDL not found. Please ensure public/idl/predict_duel.json exists and lib/idl.ts is properly configured. ' +
+        `Import error: ${importError instanceof Error ? importError.message : String(importError)}. ` +
+        `Fetch error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`
+      )
     }
-    return await response.json()
-  } catch (fetchError) {
-    console.error('Failed to load IDL:', fetchError)
-    throw new Error(
-      'IDL not found. Please ensure solana-program/target/idl/predict_duel.json exists and ' +
-      'is copied to public/idl/predict_duel.json. Error: ' + (fetchError as Error).message
-    )
   }
 }
 
