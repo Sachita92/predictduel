@@ -468,6 +468,37 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [duel, user, walletAddress, userParticipation, id, wallets])
   
+  // All hooks must be called before any early returns
+  const deadline = useMemo(() => duel ? new Date(duel.deadline) : new Date(), [duel?.deadline])
+  const isExpired = useMemo(() => new Date() >= deadline, [deadline])
+  const yesStake = useMemo(() => 
+    duel?.participants
+      ?.filter(p => p.prediction === 'yes')
+      .reduce((sum, p) => sum + p.stake, 0) || 0,
+    [duel?.participants]
+  )
+  const noStake = useMemo(() => 
+    duel?.participants
+      ?.filter(p => p.prediction === 'no')
+      .reduce((sum, p) => sum + p.stake, 0) || 0,
+    [duel?.participants]
+  )
+  
+  const handleYesBet = useCallback(() => {
+    if (canBet && !isBetting) {
+      setSelectedPrediction('yes')
+      handleBet('yes')
+    }
+  }, [canBet, isBetting, handleBet])
+  
+  const handleNoBet = useCallback(() => {
+    if (canBet && !isBetting) {
+      setSelectedPrediction('no')
+      handleBet('no')
+    }
+  }, [canBet, isBetting, handleBet])
+  
+  // Early returns after all hooks
   if (!ready || isLoading) {
     return (
       <div className="min-h-screen bg-background-dark">
@@ -497,35 +528,6 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       </div>
     )
   }
-  
-  const deadline = useMemo(() => duel ? new Date(duel.deadline) : new Date(), [duel?.deadline])
-  const isExpired = useMemo(() => new Date() >= deadline, [deadline])
-  const yesStake = useMemo(() => 
-    duel?.participants
-      ?.filter(p => p.prediction === 'yes')
-      .reduce((sum, p) => sum + p.stake, 0) || 0,
-    [duel?.participants]
-  )
-  const noStake = useMemo(() => 
-    duel?.participants
-      ?.filter(p => p.prediction === 'no')
-      .reduce((sum, p) => sum + p.stake, 0) || 0,
-    [duel?.participants]
-  )
-  
-  const handleYesBet = useCallback(() => {
-    if (canBet && !isBetting) {
-      setSelectedPrediction('yes')
-      handleBet('yes')
-    }
-  }, [canBet, isBetting, handleBet])
-  
-  const handleNoBet = useCallback(() => {
-    if (canBet && !isBetting) {
-      setSelectedPrediction('no')
-      handleBet('no')
-    }
-  }, [canBet, isBetting, handleBet])
   
   return (
     <div className="min-h-screen bg-background-dark pb-20">
