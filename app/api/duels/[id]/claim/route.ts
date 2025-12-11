@@ -4,6 +4,7 @@ import Duel from '@/models/Duel'
 import User from '@/models/User'
 import Notification from '@/models/Notification'
 import { Connection, PublicKey } from '@solana/web3.js'
+import { getSolanaConnection } from '@/lib/solana-rpc'
 
 /**
  * API Route to Claim Winnings from a Resolved Duel
@@ -123,7 +124,7 @@ export async function POST(
 
     // Verify transaction signature (optional but recommended)
     try {
-      const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
+      const connection = getSolanaConnection('confirmed')
       const tx = await connection.getTransaction(transactionSignature, {
         commitment: 'confirmed',
         maxSupportedTransactionVersion: 0,

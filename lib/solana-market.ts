@@ -16,8 +16,8 @@ import { PredictDuelClient, MarketCategory, MarketType } from '../solana-program
 // Program ID - deployed to devnet
 const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
 
-// RPC endpoint
-const RPC_ENDPOINT = 'https://api.devnet.solana.com'
+// Import RPC utility for reliable connections
+import { getSolanaConnectionWithFallback } from './solana-rpc'
 
 
 /**
@@ -163,7 +163,8 @@ async function loadIDL(): Promise<any> {
  * Initialize PredictDuel client from Solana wallet provider
  */
 export async function initializeClient(provider: any): Promise<PredictDuelClient> {
-  const connection = new Connection(RPC_ENDPOINT, 'confirmed')
+  // Use fallback RPC connection to handle endpoint failures
+  const connection = await getSolanaConnectionWithFallback('confirmed')
   const wallet = createAnchorWallet(provider)
   
   // Load IDL for browser compatibility
@@ -294,7 +295,8 @@ export async function createMarketOnChain(
       : new Date(formData.deadline)
     
     // Get connection and program ID for finding next market index
-    const connection = new Connection(RPC_ENDPOINT, 'confirmed')
+    // Use fallback RPC connection to handle endpoint failures
+    let connection = await getSolanaConnectionWithFallback('confirmed')
     const creatorPubkey = new PublicKey(provider.publicKey.toString())
     
     // Find the next available market index if not provided
@@ -311,13 +313,15 @@ export async function createMarketOnChain(
       }
     }
     
-    // Create market on-chain with retry logic for account conflicts
+    // Create market on-chain with retry logic for account conflicts and RPC failures
     let lastError: any = null
     const maxRetries = 3
+    let currentClient = client
+    let currentConnection = connection
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const { signature, marketPda } = await client.createMarket({
+        const { signature, marketPda } = await currentClient.createMarket({
           marketIndex: marketIndex!,
           question: formData.question.trim(),
           category: mapCategory(formData.category),
@@ -333,21 +337,56 @@ export async function createMarketOnChain(
       } catch (error: any) {
         lastError = error
         
-        // Check if it's an "account already in use" error
         const errorMessage = error?.message || String(error)
         const errorLogs = error?.transactionLogs || []
         const logsString = Array.isArray(errorLogs) ? errorLogs.join(' ') : String(errorLogs)
         
+        // Check if it's a network/RPC error that we can retry with a different endpoint
+        const isNetworkError = 
+          errorMessage.includes('Failed to fetch') ||
+          errorMessage.includes('failed to get recent blockhash') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('fetch failed') ||
+          errorMessage.includes('ECONNREFUSED') ||
+          errorMessage.includes('ETIMEDOUT') ||
+          errorMessage.includes('TypeError: Failed to fetch')
+        
+        // Check if it's an "account already in use" error
         const isAccountInUse = 
           errorMessage.includes('already in use') ||
           errorMessage.includes('AccountAlreadyInUse') ||
           errorMessage.includes('custom program error: 0x0') ||
           logsString.includes('already in use')
         
-        if (isAccountInUse && attempt < maxRetries - 1) {
+        // If it's a network error and we have retries left, try reinitializing with fallback endpoint
+        if (isNetworkError && attempt < maxRetries - 1) {
+          console.warn(`⚠️ RPC error on attempt ${attempt + 1}/${maxRetries}:`, errorMessage)
+          console.log('🔄 Retrying with fallback RPC endpoint...')
+          
+          try {
+            // Reinitialize client with fallback connection
+            currentConnection = await getSolanaConnectionWithFallback('confirmed')
+            const wallet = createAnchorWallet(provider)
+            const idl = await loadIDL()
+            currentClient = new PredictDuelClient(currentConnection, wallet, PROGRAM_ID, idl)
+            
+            // Also update the connection used for finding market index
+            connection = currentConnection
+            
+            // Wait a bit before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            continue // Retry with new client
+          } catch (reinitError) {
+            console.error('Failed to reinitialize client with fallback:', reinitError)
+            // Continue to next attempt or break
+            if (attempt < maxRetries - 1) {
+              continue
+            }
+          }
+        } else if (isAccountInUse && attempt < maxRetries - 1) {
           // Try to find the next available index
           try {
-            marketIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, connection, marketIndex! + 1)
+            marketIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, currentConnection, marketIndex! + 1)
             console.log(`Market index ${marketIndex! - 1} already in use, trying ${marketIndex}`)
             continue // Retry with new index
           } catch (indexError) {

@@ -10,12 +10,10 @@ import { Connection, PublicKey } from '@solana/web3.js'
 import * as anchor from '@coral-xyz/anchor'
 import { PredictDuelClient } from '../solana-program/client/sdk'
 import { createAnchorWallet } from './solana-market'
+import { getSolanaConnectionWithFallback } from './solana-rpc'
 
 // Program ID - deployed to devnet
 const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
-
-// RPC endpoint
-const RPC_ENDPOINT = 'https://api.devnet.solana.com'
 
 /**
  * Load IDL for browser environment
@@ -47,7 +45,8 @@ async function loadIDL(): Promise<any> {
  * Initialize PredictDuel client for claiming winnings
  */
 async function initializeClient(provider: any): Promise<PredictDuelClient> {
-  const connection = new Connection(RPC_ENDPOINT, 'confirmed')
+  // Use fallback RPC connection to handle endpoint failures
+  const connection = await getSolanaConnectionWithFallback('confirmed')
   const wallet = createAnchorWallet(provider)
   const idl = await loadIDL()
   
