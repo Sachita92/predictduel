@@ -322,20 +322,81 @@ export class PredictDuelClient {
         cleanIdl.metadata.address = programIdString;
       }
       
+      // Remove any undefined values from the IDL that might cause Anchor parsing issues
+      // This helps prevent _bn errors from undefined PublicKey values
+      const removeUndefined = (obj: any): any => {
+        if (obj === null || obj === undefined) {
+          return null;
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(removeUndefined).filter((item) => item !== null && item !== undefined);
+        }
+        if (typeof obj === 'object') {
+          const cleaned: any = {};
+          for (const key in obj) {
+            if (obj[key] !== undefined) {
+              cleaned[key] = removeUndefined(obj[key]);
+            }
+          }
+          return cleaned;
+        }
+        return obj;
+      };
+      
+      // Clean the IDL to remove any undefined values
+      const finalIdl = removeUndefined(cleanIdl);
+      
       // Use two-parameter version: Program(idl, provider)
       // Anchor will extract programId from metadata.address
       // By ensuring metadata.address is a clean string, we avoid "_bn" errors
-      this.program = new Program(cleanIdl, this.provider) as Program<Idl>;
-      
-      // Verify the program ID matches what we expect
-      const actualProgramId = this.program.programId.toString();
-      if (actualProgramId !== programIdString) {
-        console.warn(
-          `Program ID mismatch: expected ${programIdString}, got ${actualProgramId}. ` +
-          `Using program ID from IDL metadata (${actualProgramId}).`
-        );
-        // Update to use the actual program ID from the IDL
-        // This can happen if the IDL was generated with a different program ID
+      try {
+        // Validate provider before creating program
+        if (!this.provider || !this.provider.wallet || !this.provider.wallet.publicKey) {
+          throw new Error('Provider or provider wallet is not properly initialized');
+        }
+        
+        // Validate provider wallet publicKey one more time
+        const finalPubkey = this.provider.wallet.publicKey as any;
+        if (!finalPubkey || typeof finalPubkey.toBuffer !== 'function') {
+          throw new Error('Provider wallet publicKey is not a valid PublicKey instance');
+        }
+        
+        // Log for debugging
+        console.log('Normalized ProgramId type:', finalPubkey instanceof PublicKey || typeof finalPubkey.toBuffer === 'function');
+        console.log('Normalized ProgramId value:', programIdString);
+        console.log('Original ProgramId type:', normalizedProgramId instanceof PublicKey);
+        console.log('Provider wallet publickey:', finalPubkey.toString());
+        console.log('Provider wallet type:', typeof finalPubkey);
+        console.log('Wallet publickey type:', typeof wallet.publicKey);
+        
+        // Use two-parameter version: Program(idl, provider)
+        // Anchor will extract programId from metadata.address which we've already set
+        // The metadata.address is set as a string to avoid any PublicKey parsing issues
+        // Use finalIdl which has undefined values removed
+        this.program = new Program(finalIdl, this.provider) as Program<Idl>;
+        
+        // Verify the program ID matches what we expect
+        const actualProgramId = this.program.programId.toString();
+        if (actualProgramId !== programIdString) {
+          console.warn(
+            `Program ID mismatch: expected ${programIdString}, got ${actualProgramId}. ` +
+            `Using program ID from IDL metadata (${actualProgramId}).`
+          );
+          // Update to use the actual program ID from the IDL
+          // This can happen if the IDL was generated with a different program ID
+        }
+      } catch (programError: any) {
+        // Enhanced error message for _bn errors
+        const errorMessage = programError?.message || String(programError);
+        if (errorMessage.includes('_bn') || errorMessage.includes('Cannot read properties of undefined')) {
+          throw new Error(
+            `Failed to initialize PredictDuel program: ${errorMessage}. ` +
+            `Make sure the program ID ${programIdString} matches the deployed program and the IDL is valid. ` +
+            `Also ensure the wallet provider is properly connected. ` +
+            `Provider wallet: ${this.provider?.wallet?.publicKey?.toString() || 'undefined'}`
+          );
+        }
+        throw programError;
       }
       
       // Verify that program.programId is a valid PublicKey instance
