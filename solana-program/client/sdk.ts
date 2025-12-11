@@ -176,7 +176,9 @@ export class PredictDuelClient {
       // Try to load from file system (Node.js environment)
       // Use dynamic require with variable path to prevent build-time evaluation
       try {
-        if (typeof window === 'undefined' && typeof require !== 'undefined') {
+        // Check if we're in Node.js (not browser) environment
+        const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+        if (isNode && typeof require !== 'undefined') {
           // @ts-ignore - require may not be available in browser
           // Use dynamic path construction to prevent static analysis
           const idlPath = ["..", "target", "idl", "predict_duel.json"].join("/");
@@ -664,7 +666,7 @@ export class PredictDuelClient {
       },
     ]);
 
-    return markets.map((m) => ({
+    return markets.map((m: any) => ({
       creator: m.account.creator,
       question: m.account.question,
       category: Object.keys(m.account.category)[0],
