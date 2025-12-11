@@ -1,35 +1,233 @@
 {
-  "version": "0.1.0",
-  "name": "predict_duel",
+  "address": "8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe",
+  "metadata": {
+    "name": "predict_duel",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Prediction Market Smart Contract for Solana"
+  },
   "instructions": [
     {
-      "name": "createMarket",
-      "docs": ["Create a new prediction market"],
+      "name": "cancel_market",
+      "docs": [
+        "Cancel market (only if no participants or before deadline by creator)"
+      ],
+      "discriminator": [
+        205,
+        121,
+        84,
+        210,
+        222,
+        71,
+        150,
+        11
+      ],
       "accounts": [
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "creator",
-          "isMut": true,
-          "isSigner": true
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_winnings",
+      "docs": [
+        "Claim winnings after market is resolved"
+      ],
+      "discriminator": [
+        161,
+        215,
+        24,
+        59,
+        14,
+        236,
+        242,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
         },
         {
-          "name": "marketVault",
-          "isMut": false,
-          "isSigner": false
+          "name": "participant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  99,
+                  105,
+                  112,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "winner"
+              }
+            ]
+          }
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "winner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market_vault",
+          "docs": [
+            "System account vault that holds all stakes"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.creator",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_index",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_market",
+      "docs": [
+        "Create a new prediction market"
+      ],
+      "discriminator": [
+        103,
+        226,
+        97,
+        235,
+        200,
+        188,
+        251,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "market_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market_vault",
+          "docs": [
+            "System account vault that holds all stakes - no data, just lamports"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "market_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "marketIndex",
+          "name": "market_index",
           "type": "u64"
         },
         {
@@ -39,11 +237,13 @@
         {
           "name": "category",
           "type": {
-            "defined": "MarketCategory"
+            "defined": {
+              "name": "MarketCategory"
+            }
           }
         },
         {
-          "name": "stakeAmount",
+          "name": "stake_amount",
           "type": "u64"
         },
         {
@@ -51,41 +251,113 @@
           "type": "i64"
         },
         {
-          "name": "marketType",
+          "name": "market_type",
           "type": {
-            "defined": "MarketType"
+            "defined": {
+              "name": "MarketType"
+            }
           }
         }
       ]
     },
     {
-      "name": "placeBet",
-      "docs": ["Place a bet on a prediction market"],
+      "name": "place_bet",
+      "docs": [
+        "Place a bet on a prediction market"
+      ],
+      "discriminator": [
+        222,
+        62,
+        67,
+        220,
+        63,
+        166,
+        126,
+        33
+      ],
       "accounts": [
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "participant",
-          "isMut": true,
-          "isSigner": false
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  99,
+                  105,
+                  112,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "bettor"
+              }
+            ]
+          }
         },
         {
           "name": "bettor",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "marketVault",
-          "isMut": true,
-          "isSigner": false
+          "name": "market_vault",
+          "docs": [
+            "System account vault that holds all stakes"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.creator",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_index",
+                "account": "Market"
+              }
+            ]
+          }
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -94,24 +366,136 @@
           "type": "bool"
         },
         {
-          "name": "stakeAmount",
+          "name": "stake_amount",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "resolveMarket",
-      "docs": ["Resolve the market with the final outcome"],
+      "name": "refund_stake",
+      "docs": [
+        "Refund participants if market is cancelled"
+      ],
+      "discriminator": [
+        185,
+        80,
+        20,
+        3,
+        110,
+        92,
+        178,
+        240
+      ],
       "accounts": [
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
+        },
+        {
+          "name": "participant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  99,
+                  105,
+                  112,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "bettor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bettor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market_vault",
+          "docs": [
+            "System account vault that holds all stakes"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.creator",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_index",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_market",
+      "docs": [
+        "Resolve the market with the final outcome"
+      ],
+      "discriminator": [
+        155,
+        23,
+        80,
+        173,
+        46,
+        74,
+        23,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
         },
         {
           "name": "resolver",
-          "isMut": false,
-          "isSigner": true
+          "signer": true
         }
       ],
       "args": [
@@ -120,318 +504,34 @@
           "type": "bool"
         }
       ]
-    },
-    {
-      "name": "claimWinnings",
-      "docs": ["Claim winnings after market is resolved"],
-      "accounts": [
-        {
-          "name": "market",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "participant",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "winner",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "marketVault",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "cancelMarket",
-      "docs": ["Cancel market (only if no participants or before deadline by creator)"],
-      "accounts": [
-        {
-          "name": "market",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "creator",
-          "isMut": false,
-          "isSigner": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "refundStake",
-      "docs": ["Refund participants if market is cancelled"],
-      "accounts": [
-        {
-          "name": "market",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "participant",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "bettor",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "marketVault",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
     }
   ],
   "accounts": [
     {
       "name": "Market",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "creator",
-            "type": "publicKey"
-          },
-          {
-            "name": "marketIndex",
-            "type": "u64"
-          },
-          {
-            "name": "question",
-            "type": "string"
-          },
-          {
-            "name": "category",
-            "type": {
-              "defined": "MarketCategory"
-            }
-          },
-          {
-            "name": "stakeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "deadline",
-            "type": "i64"
-          },
-          {
-            "name": "marketType",
-            "type": {
-              "defined": "MarketType"
-            }
-          },
-          {
-            "name": "status",
-            "type": {
-              "defined": "MarketStatus"
-            }
-          },
-          {
-            "name": "poolSize",
-            "type": "u64"
-          },
-          {
-            "name": "yesCount",
-            "type": "u32"
-          },
-          {
-            "name": "noCount",
-            "type": "u32"
-          },
-          {
-            "name": "yesPool",
-            "type": "u64"
-          },
-          {
-            "name": "noPool",
-            "type": "u64"
-          },
-          {
-            "name": "totalParticipants",
-            "type": "u32"
-          },
-          {
-            "name": "outcome",
-            "type": {
-              "option": "bool"
-            }
-          },
-          {
-            "name": "createdAt",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "vaultBump",
-            "type": "u8"
-          }
-        ]
-      }
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
     },
     {
       "name": "Participant",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "publicKey"
-          },
-          {
-            "name": "bettor",
-            "type": "publicKey"
-          },
-          {
-            "name": "prediction",
-            "type": "bool"
-          },
-          {
-            "name": "stake",
-            "type": "u64"
-          },
-          {
-            "name": "claimed",
-            "type": "bool"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    }
-  ],
-  "types": [
-    {
-      "name": "MarketCategory",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Crypto"
-          },
-          {
-            "name": "Weather"
-          },
-          {
-            "name": "Sports"
-          },
-          {
-            "name": "Meme"
-          },
-          {
-            "name": "Local"
-          },
-          {
-            "name": "Other"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketType",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Public"
-          },
-          {
-            "name": "Challenge"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketStatus",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Pending"
-          },
-          {
-            "name": "Active"
-          },
-          {
-            "name": "Resolved"
-          },
-          {
-            "name": "Cancelled"
-          }
-        ]
-      }
-    },
-    {
-      "name": "PredictDuelError",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "QuestionTooLong"
-          },
-          {
-            "name": "StakeTooLow"
-          },
-          {
-            "name": "InvalidDeadline"
-          },
-          {
-            "name": "MarketNotActive"
-          },
-          {
-            "name": "MarketExpired"
-          },
-          {
-            "name": "UnauthorizedResolver"
-          },
-          {
-            "name": "MarketNotExpired"
-          },
-          {
-            "name": "MarketNotResolved"
-          },
-          {
-            "name": "AlreadyClaimed"
-          },
-          {
-            "name": "NoOutcome"
-          },
-          {
-            "name": "NotAWinner"
-          },
-          {
-            "name": "CannotCancel"
-          },
-          {
-            "name": "MarketNotCancelled"
-          }
-        ]
-      }
+      "discriminator": [
+        32,
+        142,
+        108,
+        79,
+        247,
+        179,
+        54,
+        6
+      ]
     }
   ],
   "errors": [
@@ -501,8 +601,192 @@
       "msg": "Market is not cancelled"
     }
   ],
-  "metadata": {
-    "address": "8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe"
-  }
+  "types": [
+    {
+      "name": "Market",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "market_index",
+            "type": "u64"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "type": {
+              "defined": {
+                "name": "MarketCategory"
+              }
+            }
+          },
+          {
+            "name": "stake_amount",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "market_type",
+            "type": {
+              "defined": {
+                "name": "MarketType"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "MarketStatus"
+              }
+            }
+          },
+          {
+            "name": "pool_size",
+            "type": "u64"
+          },
+          {
+            "name": "yes_count",
+            "type": "u32"
+          },
+          {
+            "name": "no_count",
+            "type": "u32"
+          },
+          {
+            "name": "yes_pool",
+            "type": "u64"
+          },
+          {
+            "name": "no_pool",
+            "type": "u64"
+          },
+          {
+            "name": "total_participants",
+            "type": "u32"
+          },
+          {
+            "name": "outcome",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketCategory",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Crypto"
+          },
+          {
+            "name": "Weather"
+          },
+          {
+            "name": "Sports"
+          },
+          {
+            "name": "Meme"
+          },
+          {
+            "name": "Local"
+          },
+          {
+            "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Resolved"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Public"
+          },
+          {
+            "name": "Challenge"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Participant",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "bettor",
+            "type": "pubkey"
+          },
+          {
+            "name": "prediction",
+            "type": "bool"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
 }
-
