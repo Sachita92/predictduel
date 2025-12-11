@@ -8,16 +8,13 @@ import User from '@/models/User'
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB()
 
-    // Handle both sync and async params (Next.js 14 vs 15)
-    const resolvedParams = typeof params === 'object' && 'then' in params
-      ? await params
-      : params
-
+    // Resolve params (Next.js 16+ uses Promise)
+    const resolvedParams = await params
     const duelId = resolvedParams.id
 
     if (!duelId) {
@@ -106,16 +103,13 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB()
 
-    // Handle both sync and async params
-    const resolvedParams = typeof params === 'object' && 'then' in params
-      ? await params
-      : params
-
+    // Resolve params (Next.js 16+ uses Promise)
+    const resolvedParams = await params
     const duelId = resolvedParams.id
     const body = await req.json()
     const { 
@@ -230,16 +224,13 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB()
 
-    // Handle both sync and async params
-    const resolvedParams = typeof params === 'object' && 'then' in params
-      ? await params
-      : params
-
+    // Resolve params (Next.js 16+ uses Promise)
+    const resolvedParams = await params
     const duelId = resolvedParams.id
     const { searchParams } = new URL(req.url)
     const privyId = searchParams.get('privyId')

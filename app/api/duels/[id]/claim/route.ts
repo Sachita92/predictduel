@@ -13,15 +13,13 @@ import { Connection, PublicKey } from '@solana/web3.js'
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB()
 
-    // Handle both sync and async params
-    const resolvedParams = typeof params === 'object' && 'then' in params
-      ? await params
-      : params
+    // Resolve params (Next.js 16+ uses Promise)
+    const resolvedParams = await params
 
     const duelId = resolvedParams.id
     const body = await req.json()
