@@ -72,6 +72,7 @@ export async function GET(
         stake: p.stake,
         won: p.won || false,
         payout: p.payout || null,
+        claimed: p.claimed || false,
       })),
       createdAt: duel.createdAt,
       updatedAt: duel.updatedAt,

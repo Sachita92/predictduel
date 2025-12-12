@@ -496,6 +496,153 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [duel, user, walletAddress, userParticipation, id, wallets])
   
+  // Claim handler for Winners section (uses participant directly)
+  const handleClaimForParticipant = useCallback(async (participant: any) => {
+    if (!duel || !user || !walletAddress) {
+      setClaimError('Please connect your wallet')
+      return
+    }
+    
+    if (!duel.marketPda) {
+      setClaimError('This duel is not connected to Solana. Please contact support.')
+      return
+    }
+    
+    // Check if this participant is the current user
+    const isCurrentUserById = currentUserId && participant.user?.id === currentUserId
+    const isCurrentUserByWallet = walletAddress && participant.user?.walletAddress && 
+      participant.user.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+    const isCurrentUser = isCurrentUserById || isCurrentUserByWallet
+    
+    if (!isCurrentUser) {
+      setClaimError('You can only claim your own winnings')
+      return
+    }
+    
+    if (!participant.won) {
+      setClaimError('You did not win this duel')
+      return
+    }
+    
+    if (participant.claimed) {
+      setClaimError('Winnings have already been claimed')
+      return
+    }
+    
+    setIsClaiming(true)
+    setClaimError(null)
+    setClaimSuccess(false)
+    
+    try {
+      // Step 1: Get Solana wallet provider
+      let solanaProvider: any = null
+      
+      // Try window.solana first (Phantom, Solflare, etc.)
+      if (typeof window !== 'undefined' && (window as any).solana) {
+        const provider = (window as any).solana
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+          if (provider.isConnected && provider.publicKey) {
+            solanaProvider = provider
+          } else {
+            try {
+              await provider.connect()
+              solanaProvider = provider
+            } catch (connectError) {
+              console.error('Failed to connect wallet:', connectError)
+            }
+          }
+        }
+      }
+      
+      // If window.solana not available, try Privy wallets
+      if (!solanaProvider && wallets.length > 0) {
+        const solanaWallet = wallets.find((w: any) => 
+          w.chainType === 'solana' || 
+          (w.address && !w.address.startsWith('0x'))
+        )
+        
+        if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
+          solanaProvider = (window as any).solana
+        }
+      }
+      
+      if (!solanaProvider) {
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+      }
+      
+      // Step 2: Claim winnings on-chain
+      const onChainResult = await claimWinningsOnChain(solanaProvider, {
+        marketPda: duel.marketPda,
+      })
+      
+      // Step 3: Update MongoDB
+      const response = await fetch(`/api/duels/${id}/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          transactionSignature: onChainResult.signature,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        // Check if error is "already claimed" - treat as success
+        const errorMsg = data.error || 'Failed to claim winnings'
+        const isAlreadyClaimed = 
+          errorMsg.includes('already been claimed') ||
+          errorMsg.includes('already claimed') ||
+          errorMsg.includes('AlreadyClaimed')
+        
+        if (isAlreadyClaimed) {
+          // Winnings already claimed - refresh data to show success state
+          console.log('Winnings already claimed (from API) - refreshing duel data')
+          fetchDuel()
+          return // Exit early, don't throw error
+        }
+        
+        throw new Error(errorMsg)
+      }
+      
+      setClaimSuccess(true)
+      setClaimTransactionSignature(onChainResult.signature)
+      
+      // Refresh duel data
+      setTimeout(() => {
+        fetchDuel()
+        setClaimSuccess(false)
+        setClaimTransactionSignature(null)
+      }, 3000)
+      
+    } catch (error) {
+      console.error('Error claiming winnings:', error)
+      
+      // Check if error is "AlreadyClaimed" (Error Code 6008)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const isAlreadyClaimed = 
+        errorMessage.includes('AlreadyClaimed') ||
+        errorMessage.includes('6008') ||
+        errorMessage.includes('Winnings already claimed') ||
+        errorMessage.includes('already been claimed')
+      
+      if (isAlreadyClaimed) {
+        // Winnings are already claimed - refresh data to show success state
+        console.log('Winnings already claimed - refreshing duel data')
+        setClaimError(null)
+        // Refresh duel data to update the claimed status
+        fetchDuel()
+      } else {
+        // Other errors - show error message
+        setClaimError(errorMessage)
+      }
+    } finally {
+      setIsClaiming(false)
+    }
+  }, [duel, user, walletAddress, currentUserId, id, wallets, fetchDuel])
+  
   // All hooks must be called before any early returns
   const deadline = useMemo(() => duel ? new Date(duel.deadline) : new Date(), [duel?.deadline])
   const isExpired = useMemo(() => new Date() >= deadline, [deadline])
@@ -939,8 +1086,65 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 {duel.participants
                   .filter((p: any) => p.won)
                   .map((participant: any, index: number) => {
-                    const isCurrentUser = currentUserId && participant.user?.id === currentUserId
-                    const canClaim = isCurrentUser && !participant.claimed && participant.payout && participant.payout > 0
+                    // Multiple ways to check if this participant is the current user
+                    const isCurrentUserById = currentUserId && participant.user?.id === currentUserId
+                    const isCurrentUserByWallet = walletAddress && participant.user?.walletAddress && 
+                      participant.user.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+                    // Check if userParticipation matches this participant (by ID or wallet)
+                    const isUserParticipation = userParticipation && (
+                      userParticipation.user?.id === participant.user?.id ||
+                      (walletAddress && userParticipation.user?.walletAddress && 
+                       userParticipation.user.walletAddress.toLowerCase() === walletAddress.toLowerCase())
+                    )
+                    // Check by Privy ID if available
+                    const isCurrentUserByPrivyId = user?.id && participant.user?.privyId === user.id
+                    
+                    const isCurrentUser = isCurrentUserById || isCurrentUserByWallet || isUserParticipation || isCurrentUserByPrivyId
+                    
+                    // Show claim button if user is authenticated and this is their entry
+                    const isWinner = participant.won === true
+                    const hasPayout = participant.payout && participant.payout > 0
+                    const notClaimed = !participant.claimed
+                    
+                    // Primary check: normal matching
+                    const canClaim = authenticated && isCurrentUser && isWinner && notClaimed && hasPayout
+                    
+                    // Fallback: If userParticipation exists and shows they won, and this participant matches,
+                    // show the button even if exact matching failed
+                    const hasWinningParticipation = authenticated && userParticipation && userParticipation.won && 
+                      !userParticipation.claimed && userParticipation.payout && userParticipation.payout > 0
+                    const participantMatches = userParticipation && participant.user?.id === userParticipation.user?.id
+                    
+                    // Show button if: (normal matching) OR (userParticipation shows win and participant matches)
+                    const shouldShowButton = canClaim || (hasWinningParticipation && participantMatches && notClaimed && hasPayout)
+                    
+                    // Debug logging - always log in development to help diagnose issues
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log(`[Claim Button Debug] ${participant.user?.username}:`, {
+                        authenticated,
+                        currentUserId,
+                        participantUserId: participant.user?.id,
+                        isCurrentUserById,
+                        walletAddress,
+                        participantWallet: participant.user?.walletAddress,
+                        isCurrentUserByWallet,
+                        isUserParticipation,
+                        isCurrentUserByPrivyId,
+                        isCurrentUser,
+                        isWinner,
+                        hasPayout,
+                        notClaimed,
+                        canClaim,
+                        hasWinningParticipation,
+                        participantMatches,
+                        shouldShowButton,
+                        userParticipation: userParticipation ? {
+                          won: userParticipation.won,
+                          claimed: userParticipation.claimed,
+                          payout: userParticipation.payout
+                        } : null
+                      })
+                    }
                     
                     return (
                       <div
@@ -970,15 +1174,15 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                         </div>
                         
                         {/* Claim button for current user */}
-                        {canClaim && (
+                        {shouldShowButton && (
                           <div className="mt-3 pt-3 border-t border-success/20">
-                            {claimError && isCurrentUser && (
+                            {claimError && (
                               <div className="mb-2 p-2 bg-danger/20 border border-danger/30 rounded-lg text-danger text-xs">
                                 {claimError}
                               </div>
                             )}
                             
-                            {claimSuccess && isCurrentUser && (
+                            {claimSuccess && (
                               <div className="mb-2 p-2 bg-success/20 border border-success/30 rounded-lg text-success text-xs">
                                 <div className="flex items-center justify-between">
                                   <span>✓ Winnings claimed successfully!</span>
@@ -997,7 +1201,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                             )}
                             
                             <Button
-                              onClick={handleClaim}
+                              onClick={() => handleClaimForParticipant(participant)}
                               disabled={isClaiming}
                               className="w-full text-sm py-2"
                               variant="success"
