@@ -132,6 +132,11 @@ export default function CreatePage() {
           // If not connected or publicKey is missing, try to connect
           if (!solanaProvider) {
             try {
+              // Check if wallet is available and not disconnected
+              if (provider.isConnected === false) {
+                console.log('Wallet not connected, attempting to connect...')
+              }
+              
               const response = await provider.connect()
               // After connect, publicKey should be available
               // Wait a moment for it to be set
@@ -140,13 +145,24 @@ export default function CreatePage() {
               // Verify publicKey is now available
               if (provider.publicKey && provider.publicKey.toString && provider.publicKey.toString().length > 0) {
                 solanaProvider = provider
+                console.log('✅ Wallet connected successfully')
               } else {
                 throw new Error('Wallet connected but publicKey is not available')
               }
             } catch (connectError) {
               console.error('Failed to connect wallet:', connectError)
+              const errorMsg = connectError instanceof Error ? connectError.message : String(connectError)
+              
+              // Provide specific error messages
+              if (errorMsg.includes('User rejected') || errorMsg.includes('user rejected')) {
+                throw new Error('Wallet connection was cancelled. Please approve the connection in your wallet.')
+              }
+              if (errorMsg.includes('disconnected') || errorMsg.includes('port')) {
+                throw new Error('Wallet extension is disconnected. Please refresh the page and try again.')
+              }
+              
               throw new Error(
-                `Failed to connect Solana wallet: ${connectError instanceof Error ? connectError.message : String(connectError)}. ` +
+                `Failed to connect Solana wallet: ${errorMsg}. ` +
                 `Please make sure your wallet is unlocked and try again.`
               )
             }
@@ -177,9 +193,19 @@ export default function CreatePage() {
         throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
       }
       
-      // Final validation: ensure publicKey exists
+      // Final validation: ensure publicKey exists and wallet is connected
       if (!solanaProvider.publicKey) {
         throw new Error('Wallet provider does not have a publicKey. Please connect your wallet and try again.')
+      }
+      
+      // Check if wallet is still connected (for Phantom)
+      if (solanaProvider.isConnected === false) {
+        throw new Error('Wallet is disconnected. Please reconnect your wallet and try again.')
+      }
+      
+      // Verify signTransaction method exists
+      if (!solanaProvider.signTransaction || typeof solanaProvider.signTransaction !== 'function') {
+        throw new Error('Wallet does not support transaction signing. Please use a compatible Solana wallet like Phantom.')
       }
       
       // Log for debugging

@@ -119,7 +119,42 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
       if (!walletProvider.signTransaction) {
         throw new Error('Provider does not support signTransaction')
       }
-      return await walletProvider.signTransaction(tx) as T
+      
+      // Check if wallet is still connected
+      if (!walletProvider.publicKey) {
+        throw new Error('Wallet is disconnected. Please reconnect your wallet and try again.')
+      }
+      
+      // Check if wallet is connected (for Phantom)
+      if (walletProvider.isConnected === false) {
+        throw new Error('Wallet is not connected. Please connect your wallet and try again.')
+      }
+      
+      try {
+        // Add timeout to prevent hanging
+        const signPromise = walletProvider.signTransaction(tx)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction signing timed out. Please try again.')), 30000)
+        )
+        
+        return await Promise.race([signPromise, timeoutPromise]) as T
+      } catch (error) {
+        // Provide more helpful error messages
+        if (error instanceof Error) {
+          if (error.message.includes('User rejected') || error.message.includes('user rejected')) {
+            throw new Error('Transaction was cancelled. Please approve the transaction in your wallet.')
+          }
+          if (error.message.includes('disconnected') || error.message.includes('port')) {
+            throw new Error('Wallet connection lost. Please refresh the page and reconnect your wallet.')
+          }
+          if (error.message.includes('timeout')) {
+            throw new Error('Transaction signing timed out. Please try again.')
+          }
+          // Re-throw with original message
+          throw new Error(`Failed to sign transaction: ${error.message}`)
+        }
+        throw new Error('Failed to sign transaction. Please try again.')
+      }
     },
     signAllTransactions: async <T extends anchor.web3.Transaction | anchor.web3.VersionedTransaction>(
       txs: T[]
@@ -127,7 +162,42 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
       if (!walletProvider.signAllTransactions) {
         throw new Error('Provider does not support signAllTransactions')
       }
-      return await walletProvider.signAllTransactions(txs) as T[]
+      
+      // Check if wallet is still connected
+      if (!walletProvider.publicKey) {
+        throw new Error('Wallet is disconnected. Please reconnect your wallet and try again.')
+      }
+      
+      // Check if wallet is connected (for Phantom)
+      if (walletProvider.isConnected === false) {
+        throw new Error('Wallet is not connected. Please connect your wallet and try again.')
+      }
+      
+      try {
+        // Add timeout to prevent hanging
+        const signPromise = walletProvider.signAllTransactions(txs)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction signing timed out. Please try again.')), 60000)
+        )
+        
+        return await Promise.race([signPromise, timeoutPromise]) as T[]
+      } catch (error) {
+        // Provide more helpful error messages
+        if (error instanceof Error) {
+          if (error.message.includes('User rejected') || error.message.includes('user rejected')) {
+            throw new Error('Transaction was cancelled. Please approve the transaction in your wallet.')
+          }
+          if (error.message.includes('disconnected') || error.message.includes('port')) {
+            throw new Error('Wallet connection lost. Please refresh the page and reconnect your wallet.')
+          }
+          if (error.message.includes('timeout')) {
+            throw new Error('Transaction signing timed out. Please try again.')
+          }
+          // Re-throw with original message
+          throw new Error(`Failed to sign transactions: ${error.message}`)
+        }
+        throw new Error('Failed to sign transactions. Please try again.')
+      }
     },
   } as anchor.Wallet
   

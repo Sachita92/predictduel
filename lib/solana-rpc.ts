@@ -43,13 +43,24 @@ export async function getSolanaConnectionWithFallback(
       const connection = new Connection(endpoint, commitment)
       
       // Test the connection by getting a recent blockhash
-      // This will fail if the endpoint is unreachable
+      // This will fail if the endpoint is unreachable or blocked by CSP
       // Use getLatestBlockhash (newer API) with fallback to getRecentBlockhash for compatibility
       try {
         await connection.getLatestBlockhash('finalized')
-      } catch {
+      } catch (blockhashError) {
+        // Check if it's a CSP error
+        const errorMsg = blockhashError instanceof Error ? blockhashError.message : String(blockhashError)
+        if (errorMsg.includes('CSP') || errorMsg.includes('Content Security Policy') || errorMsg.includes('Refused to connect')) {
+          console.warn(`⚠️ CSP blocking RPC endpoint ${endpoint}. Trying next endpoint...`)
+          throw blockhashError // Re-throw to continue to next endpoint
+        }
         // Fallback for older Solana web3.js versions
-        await connection.getRecentBlockhash('finalized')
+        try {
+          await connection.getRecentBlockhash('finalized')
+        } catch {
+          // If both fail, it's likely a network/CSP issue
+          throw blockhashError
+        }
       }
       
       // Connection is working
