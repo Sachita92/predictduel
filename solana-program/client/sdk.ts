@@ -173,25 +173,9 @@ export class PredictDuelClient {
       // IDL passed directly (browser-friendly)
       idlRaw = idl;
     } else {
-      // Try to load from file system (Node.js environment)
-      // Use dynamic require with variable path to prevent build-time evaluation
-      try {
-        // Check if we're in Node.js (not browser) environment
-        const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
-        if (isNode && typeof require !== 'undefined') {
-          // @ts-ignore - require may not be available in browser
-          // Use dynamic path construction to prevent static analysis
-          const idlPath = ["..", "target", "idl", "predict_duel.json"].join("/");
-          idlRaw = require(idlPath);
-        } else {
-          throw new Error("IDL must be provided in browser environments");
-        }
-      } catch (e) {
-        throw new Error(
-          "IDL not found. In browser environments, pass the IDL as the 4th parameter to PredictDuelClient constructor, " +
-          "or ensure the IDL file is accessible. Error: " + (e as Error).message
-        );
-      }
+      throw new Error(
+        "IDL not found. In browser environments, pass the IDL as the 4th parameter to PredictDuelClient constructor."
+      );
     }
     
     // Parse IDL - avoid unnecessary stringify/parse if already an object
