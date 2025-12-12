@@ -1,31 +1,27 @@
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { PublicKey, LAMPORTS_PER_SOL, Connection } from '@solana/web3.js'
+import { getRpcEndpoints } from './solana-rpc'
 
 /**
- * Solana RPC endpoint - you should use your own endpoint for production
- * Get a free endpoint from:
- * - https://www.helius.dev (free tier available)
- * 
- * Defaults to devnet for development to avoid rate limits on public mainnet endpoint
- * Fallback endpoints are used if the primary endpoint fails
- */
-const SOLANA_RPC_ENDPOINTS = [
-  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
-  'https://rpc.ankr.com/solana_devnet', // Fallback: Ankr (free public endpoint)
-]
-
-/**
- * Fetch wallet balance for Solana with retry logic
+ * Fetch wallet balance for Solana with retry logic and fallback endpoints
+ * Uses the centralized RPC utility for reliable connections
  */
 export async function getSolanaBalance(address: string): Promise<number> {
   const publicKey = new PublicKey(address)
   let lastError: Error | null = null
+  const endpoints = getRpcEndpoints()
   
   // Try each RPC endpoint in order
-  for (let i = 0; i < SOLANA_RPC_ENDPOINTS.length; i++) {
-    const endpoint = SOLANA_RPC_ENDPOINTS[i]
+  for (let i = 0; i < endpoints.length; i++) {
+    const endpoint = endpoints[i]
     try {
       const connection = new Connection(endpoint, 'confirmed')
       const balance = await connection.getBalance(publicKey)
+      
+      // Success - log if using fallback
+      if (i > 0) {
+        console.log(`✅ Balance fetched using fallback RPC endpoint ${i + 1}/${endpoints.length}: ${endpoint}`)
+      }
+      
       return balance / LAMPORTS_PER_SOL
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -33,9 +29,21 @@ export async function getSolanaBalance(address: string): Promise<number> {
       
       // Log error but continue to next endpoint
       if (i === 0) {
-        // Only log the primary endpoint error
-        console.warn(`Primary RPC endpoint failed (${endpoint}):`, errorMessage)
+        console.warn(`⚠️ Primary RPC endpoint failed (${endpoint}):`, errorMessage)
+        if (i < endpoints.length - 1) {
+          console.log(`Trying fallback RPC endpoint ${i + 2}/${endpoints.length}...`)
+        }
       }
+      
+      // Check if it's a network/connectivity error that we should retry
+      const isNetworkError = 
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('failed to get balance') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('fetch failed') ||
+        errorMessage.includes('ECONNREFUSED') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('TypeError: Failed to fetch')
       
       // Check if it's a rate limit or authentication error
       const isRateLimitError = 
@@ -46,14 +54,20 @@ export async function getSolanaBalance(address: string): Promise<number> {
         errorMessage.includes('Access forbidden') ||
         errorMessage.includes('rate limit')
       
-      if (isRateLimitError && i < SOLANA_RPC_ENDPOINTS.length - 1) {
-        // Try next endpoint
-        console.log(`Trying fallback RPC endpoint ${i + 2}/${SOLANA_RPC_ENDPOINTS.length}...`)
+      // If it's a network error and we have more endpoints, continue
+      if (isNetworkError && i < endpoints.length - 1) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000))
         continue
       }
       
-      // If it's not a rate limit error or we're on the last endpoint, break
-      if (!isRateLimitError) {
+      // If it's a rate limit error and we have more endpoints, continue
+      if (isRateLimitError && i < endpoints.length - 1) {
+        continue
+      }
+      
+      // If it's not a retryable error or we're on the last endpoint, break
+      if (!isNetworkError && !isRateLimitError) {
         break
       }
     }
@@ -61,15 +75,22 @@ export async function getSolanaBalance(address: string): Promise<number> {
   
   // All endpoints failed
   const errorMessage = lastError instanceof Error ? lastError.message : String(lastError)
-  console.error('Error fetching Solana balance from all endpoints:', errorMessage)
+  console.error('❌ Error fetching Solana balance from all endpoints:', errorMessage)
   
   // Provide helpful error message
   if (errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('429')) {
     console.warn(
       '⚠️ RPC endpoint rate limited or unavailable. ' +
       'Consider using a dedicated RPC provider. ' +
-      'Set NEXT_PUBLIC_SOLANA_RPC_URL environment variable with your RPC endpoint. ' +
+      'Set NEXT_PUBLIC_SOLANA_RPC_URL or NEXT_PUBLIC_SOLANA_RPC_URI environment variable with your RPC endpoint. ' +
       'Free options: QuickNode, Alchemy, Helius, or Ankr.'
+    )
+  } else if (errorMessage.includes('Failed to fetch')) {
+    console.warn(
+      '⚠️ Network error connecting to RPC endpoints. ' +
+      'Please check your internet connection and verify NEXT_PUBLIC_SOLANA_RPC_URL is set correctly. ' +
+      'If using Helius, ensure the endpoint URL includes your API key if required. ' +
+      'Example: https://rpc-devnet.helius.xyz/?api-key=YOUR_API_KEY'
     )
   }
   

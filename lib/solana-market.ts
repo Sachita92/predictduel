@@ -29,7 +29,10 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
     throw new Error('Provider is required but was not provided')
   }
   
-  if (!provider.publicKey) {
+  // The provider IS the wallet (window.solana), not provider.wallet
+  const walletProvider = provider.wallet || provider
+  
+  if (!walletProvider.publicKey) {
     throw new Error(
       'Wallet provider does not have a publicKey. ' +
       'This usually means the wallet is not connected. ' +
@@ -40,15 +43,16 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
   // Debug logging - detailed information about the provider
   console.log('🔍 createAnchorWallet Debug:')
   console.log('  provider type:', typeof provider)
-  console.log('  provider.publicKey type:', typeof provider.publicKey)
-  console.log('  provider.publicKey instanceof PublicKey:', provider.publicKey instanceof PublicKey)
-  console.log('  provider.publicKey value:', provider.publicKey?.toString?.() || provider.publicKey)
-  console.log('  provider.publicKey constructor:', provider.publicKey?.constructor?.name)
-  console.log('  provider.isConnected:', provider.isConnected)
-  console.log('  provider.isPhantom:', provider.isPhantom)
+  console.log('  walletProvider type:', typeof walletProvider)
+  console.log('  walletProvider.publicKey type:', typeof walletProvider.publicKey)
+  console.log('  walletProvider.publicKey instanceof PublicKey:', walletProvider.publicKey instanceof PublicKey)
+  console.log('  walletProvider.publicKey value:', walletProvider.publicKey?.toString?.() || walletProvider.publicKey)
+  console.log('  walletProvider.publicKey constructor:', walletProvider.publicKey?.constructor?.name)
+  console.log('  walletProvider.isConnected:', walletProvider.isConnected)
+  console.log('  walletProvider.isPhantom:', walletProvider.isPhantom)
   
   // Check if publicKey looks like a valid Solana address
-  const pubkeyStr = provider.publicKey?.toString?.() || String(provider.publicKey || '')
+  const pubkeyStr = walletProvider.publicKey?.toString?.() || String(walletProvider.publicKey || '')
   if (pubkeyStr && pubkeyStr.length > 0) {
     if (pubkeyStr.startsWith('0x')) {
       console.error('❌ ERROR: This looks like an Ethereum address (starts with 0x), not Solana!')
@@ -68,12 +72,12 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
   try {
     // Get the string representation of the publicKey
     let publicKeyString: string
-    if (typeof provider.publicKey === 'string') {
-      publicKeyString = provider.publicKey
-    } else if (provider.publicKey && typeof provider.publicKey.toString === 'function') {
-      publicKeyString = provider.publicKey.toString()
+    if (typeof walletProvider.publicKey === 'string') {
+      publicKeyString = walletProvider.publicKey
+    } else if (walletProvider.publicKey && typeof walletProvider.publicKey.toString === 'function') {
+      publicKeyString = walletProvider.publicKey.toString()
     } else {
-      throw new Error(`Cannot convert publicKey to string. Type: ${typeof provider.publicKey}, value: ${provider.publicKey}`)
+      throw new Error(`Cannot convert publicKey to string. Type: ${typeof walletProvider.publicKey}, value: ${walletProvider.publicKey}`)
     }
     
     // Validate the string is not empty
@@ -85,10 +89,10 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
     publicKey = new PublicKey(publicKeyString)
   } catch (error) {
     console.error('Error creating PublicKey:', error)
-    console.error('Provider publicKey details:', {
-      type: typeof provider.publicKey,
-      value: provider.publicKey,
-      hasToString: typeof provider.publicKey?.toString === 'function',
+    console.error('WalletProvider publicKey details:', {
+      type: typeof walletProvider.publicKey,
+      value: walletProvider.publicKey,
+      hasToString: typeof walletProvider.publicKey?.toString === 'function',
     })
     throw new Error(
       `Invalid publicKey format: ${error instanceof Error ? error.message : String(error)}. ` +
@@ -112,18 +116,18 @@ export function createAnchorWallet(provider: any): anchor.Wallet {
     signTransaction: async <T extends anchor.web3.Transaction | anchor.web3.VersionedTransaction>(
       tx: T
     ): Promise<T> => {
-      if (!provider.signTransaction) {
+      if (!walletProvider.signTransaction) {
         throw new Error('Provider does not support signTransaction')
       }
-      return await provider.signTransaction(tx) as T
+      return await walletProvider.signTransaction(tx) as T
     },
     signAllTransactions: async <T extends anchor.web3.Transaction | anchor.web3.VersionedTransaction>(
       txs: T[]
     ): Promise<T[]> => {
-      if (!provider.signAllTransactions) {
+      if (!walletProvider.signAllTransactions) {
         throw new Error('Provider does not support signAllTransactions')
       }
-      return await provider.signAllTransactions(txs) as T[]
+      return await walletProvider.signAllTransactions(txs) as T[]
     },
   } as anchor.Wallet
   

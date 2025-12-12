@@ -2,10 +2,12 @@ import { Connection } from '@solana/web3.js'
 
 /**
  * RPC endpoints with fallback support
- * Primary endpoint can be set via NEXT_PUBLIC_SOLANA_RPC_URL environment variable
+ * Primary endpoint can be set via NEXT_PUBLIC_SOLANA_RPC_URL or NEXT_PUBLIC_SOLANA_RPC_URI environment variable
  */
 const SOLANA_RPC_ENDPOINTS = [
-  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URI || 
+  'https://api.devnet.solana.com',
   'https://rpc.ankr.com/solana_devnet', // Fallback: Ankr (free public endpoint)
   'https://api.devnet.solana.com', // Final fallback to official endpoint
 ]
@@ -96,8 +98,9 @@ export async function getSolanaConnectionWithFallback(
   console.warn(
     '⚠️ All Solana RPC endpoints are unavailable. ' +
     'Consider using a dedicated RPC provider. ' +
-    'Set NEXT_PUBLIC_SOLANA_RPC_URL environment variable with your RPC endpoint. ' +
-    'Free options: QuickNode, Alchemy, Helius, or Ankr.'
+    'Set NEXT_PUBLIC_SOLANA_RPC_URL or NEXT_PUBLIC_SOLANA_RPC_URI environment variable with your RPC endpoint. ' +
+    'Free options: QuickNode, Alchemy, Helius, or Ankr. ' +
+    'For Helius: https://rpc-devnet.helius.xyz/?api-key=YOUR_API_KEY'
   )
   
   // Return connection to primary endpoint anyway (will likely fail, but better than nothing)
