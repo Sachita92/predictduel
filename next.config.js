@@ -76,6 +76,26 @@ const nextConfig = {
       );
     }
 
+    // Fix chunk loading issues
+    config.optimization = {
+      ...config.optimization,
+      splitChunks: {
+        chunks: 'all',
+        cacheGroups: {
+          default: false,
+          vendors: false,
+        },
+      },
+    };
+
+    // Improve chunk loading reliability
+    if (!isServer) {
+      config.output = {
+        ...config.output,
+        chunkLoadTimeout: 30000, // 30 seconds
+      };
+    }
+
     return config;
   },
 }

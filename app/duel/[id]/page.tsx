@@ -443,7 +443,21 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to claim winnings')
+        // Check if error is "already claimed" - treat as success
+        const errorMsg = data.error || 'Failed to claim winnings'
+        const isAlreadyClaimed = 
+          errorMsg.includes('already been claimed') ||
+          errorMsg.includes('already claimed') ||
+          errorMsg.includes('AlreadyClaimed')
+        
+        if (isAlreadyClaimed) {
+          // Winnings already claimed - refresh data to show success state
+          console.log('Winnings already claimed (from API) - refreshing duel data')
+          fetchDuel()
+          return // Exit early, don't throw error
+        }
+        
+        throw new Error(errorMsg)
       }
       
       setClaimSuccess(true)
@@ -458,7 +472,25 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       
     } catch (error) {
       console.error('Error claiming winnings:', error)
-      setClaimError(error instanceof Error ? error.message : 'Failed to claim winnings')
+      
+      // Check if error is "AlreadyClaimed" (Error Code 6008)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const isAlreadyClaimed = 
+        errorMessage.includes('AlreadyClaimed') ||
+        errorMessage.includes('6008') ||
+        errorMessage.includes('Winnings already claimed') ||
+        errorMessage.includes('already been claimed')
+      
+      if (isAlreadyClaimed) {
+        // Winnings are already claimed - refresh data to show success state
+        console.log('Winnings already claimed - refreshing duel data')
+        setClaimError(null)
+        // Refresh duel data to update the claimed status
+        fetchDuel()
+      } else {
+        // Other errors - show error message
+        setClaimError(errorMessage)
+      }
     } finally {
       setIsClaiming(false)
     }
@@ -793,12 +825,25 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     <span className="text-2xl">🎉</span>
                     <h4 className="text-lg font-bold text-success">You Won!</h4>
                   </div>
-                  <p className="text-sm text-white/80 mb-2">
-                    Congratulations! Your prediction was correct. You can claim your winnings below.
-                  </p>
-                  <div className="text-xs text-white/60">
-                    Your payout: <span className="font-bold text-success text-sm">{userParticipation.payout?.toFixed(2) || '0.00'} {currency}</span>
-                  </div>
+                  {userParticipation.claimed ? (
+                    <>
+                      <p className="text-sm text-white/80 mb-2">
+                        🎊 Congratulations! Your prediction was correct and your winnings have been claimed.
+                      </p>
+                      <div className="text-xs text-white/60">
+                        Your payout: <span className="font-bold text-success text-sm">{userParticipation.payout?.toFixed(2) || '0.00'} {currency}</span> has been transferred to your wallet
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-white/80 mb-2">
+                        Congratulations! Your prediction was correct. You can claim your winnings below.
+                      </p>
+                      <div className="text-xs text-white/60">
+                        Your payout: <span className="font-bold text-success text-sm">{userParticipation.payout?.toFixed(2) || '0.00'} {currency}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
