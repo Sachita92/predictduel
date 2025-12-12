@@ -15,7 +15,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://auth.privy.io https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://api.testnet.solana.com https://*.solana.com wss://*.solana.com",
+              "connect-src 'self' http://localhost:* ws://localhost:* https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://api.testnet.solana.com https://*.solana.com wss://*.solana.com https://explorer-api.walletconnect.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org",
               "frame-src 'self' https://auth.privy.io",
               "frame-ancestors 'self' https://auth.privy.io",
             ].join('; '),
@@ -26,7 +26,7 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
-    const { IgnorePlugin, NormalModuleReplacementPlugin } = require('webpack');
+    const { IgnorePlugin } = require('webpack');
 
     // Ignore thread-stream test files
     config.plugins.push(
@@ -66,33 +66,22 @@ const nextConfig = {
       })
     );
 
-    // Replace the IDL require with an empty module for browser builds
+    // Add webpack fallbacks for Node.js modules (for browser compatibility)
     if (!isServer) {
-      config.plugins.push(
-        new NormalModuleReplacementPlugin(
-          /target[\\/]idl[\\/]predict_duel\.json$/,
-          require.resolve('./empty-module.js')
-        )
-      );
-    }
-
-    // Fix chunk loading issues
-    config.optimization = {
-      ...config.optimization,
-      splitChunks: {
-        chunks: 'all',
-        cacheGroups: {
-          default: false,
-          vendors: false,
-        },
-      },
-    };
-
-    // Improve chunk loading reliability
-    if (!isServer) {
-      config.output = {
-        ...config.output,
-        chunkLoadTimeout: 30000, // 30 seconds
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
       };
     }
 
