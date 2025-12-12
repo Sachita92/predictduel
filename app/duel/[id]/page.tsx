@@ -938,32 +938,87 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="text-sm font-semibold text-white/80 mb-2">Winner Details:</div>
                 {duel.participants
                   .filter((p: any) => p.won)
-                  .map((participant: any, index: number) => (
-                    <div
-                      key={participant.id || index}
-                      className="p-3 bg-success/10 border border-success/20 rounded-lg flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold">
-                          {participant.user?.username?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <div className="font-semibold">@{participant.user?.username || 'Unknown'}</div>
-                          <div className="text-xs text-white/60">
-                            Stake: {participant.stake.toFixed(2)} {currency}
+                  .map((participant: any, index: number) => {
+                    const isCurrentUser = currentUserId && participant.user?.id === currentUserId
+                    const canClaim = isCurrentUser && !participant.claimed && participant.payout && participant.payout > 0
+                    
+                    return (
+                      <div
+                        key={participant.id || index}
+                        className="p-3 bg-success/10 border border-success/20 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold">
+                              {participant.user?.username?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <div>
+                              <div className="font-semibold">@{participant.user?.username || 'Unknown'}</div>
+                              <div className="text-xs text-white/60">
+                                Stake: {participant.stake.toFixed(2)} {currency}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-success">
+                              {participant.payout?.toFixed(2) || '0.00'} {currency}
+                            </div>
+                            <div className="text-xs text-white/60">
+                              {participant.claimed ? '✓ Claimed' : 'Pending'}
+                            </div>
                           </div>
                         </div>
+                        
+                        {/* Claim button for current user */}
+                        {canClaim && (
+                          <div className="mt-3 pt-3 border-t border-success/20">
+                            {claimError && isCurrentUser && (
+                              <div className="mb-2 p-2 bg-danger/20 border border-danger/30 rounded-lg text-danger text-xs">
+                                {claimError}
+                              </div>
+                            )}
+                            
+                            {claimSuccess && isCurrentUser && (
+                              <div className="mb-2 p-2 bg-success/20 border border-success/30 rounded-lg text-success text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span>✓ Winnings claimed successfully!</span>
+                                  {claimTransactionSignature && (
+                                    <a
+                                      href={`https://solscan.io/tx/${claimTransactionSignature}?cluster=devnet`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-success hover:underline ml-2 text-xs"
+                                    >
+                                      View Transaction
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            <Button
+                              onClick={handleClaim}
+                              disabled={isClaiming}
+                              className="w-full text-sm py-2"
+                              variant="success"
+                            >
+                              {isClaiming ? (
+                                <>
+                                  <Loader2 className="animate-spin mr-2" size={16} />
+                                  Claiming...
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-lg mr-2">💰</span>
+                                  Claim {participant.payout.toFixed(2)} {currency}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-success">
-                          {participant.payout?.toFixed(2) || '0.00'} {currency}
-                        </div>
-                        <div className="text-xs text-white/60">
-                          {participant.claimed ? '✓ Claimed' : 'Pending'}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
               </div>
             ) : (
               <div className="text-center py-4 text-white/60">
