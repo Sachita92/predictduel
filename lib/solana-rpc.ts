@@ -10,7 +10,7 @@ const SOLANA_RPC_ENDPOINTS = [
   'https://api.devnet.solana.com',
   'https://rpc.ankr.com/solana_devnet', // Fallback: Ankr (free public endpoint)
   'https://api.devnet.solana.com', // Final fallback to official endpoint
-]
+].filter((endpoint): endpoint is string => Boolean(endpoint)) // Filter out undefined/null values
 
 /**
  * Get a Solana connection with automatic fallback if primary endpoint fails
@@ -48,16 +48,57 @@ export async function getSolanaConnectionWithFallback(
       try {
         await connection.getLatestBlockhash('finalized')
       } catch (blockhashError) {
-        // Check if it's a CSP error
+        // Extract error message
         const errorMsg = blockhashError instanceof Error ? blockhashError.message : String(blockhashError)
-        if (errorMsg.includes('CSP') || errorMsg.includes('Content Security Policy') || errorMsg.includes('Refused to connect')) {
-          console.warn(`⚠️ CSP blocking RPC endpoint ${endpoint}. Trying next endpoint...`)
+        
+        // Check if it's a network/fetch error
+        const isNetworkError = 
+          errorMsg.includes('Failed to fetch') ||
+          errorMsg.includes('NetworkError') ||
+          errorMsg.includes('fetch failed') ||
+          errorMsg.includes('ECONNREFUSED') ||
+          errorMsg.includes('ETIMEDOUT') ||
+          errorMsg.includes('TypeError')
+        
+        // Check if it's a CSP error
+        const isCSPError = 
+          errorMsg.includes('CSP') || 
+          errorMsg.includes('Content Security Policy') || 
+          errorMsg.includes('Refused to connect')
+        
+        // Check if it's a StructError (RPC response format mismatch)
+        const isStructError = 
+          errorMsg.includes('StructError') || 
+          errorMsg.includes('Expected the value to satisfy')
+        
+        if (isNetworkError || isCSPError || isStructError) {
+          const errorType = isCSPError ? 'CSP blocking' : isStructError ? 'unexpected response format' : 'network error'
+          console.warn(`⚠️ RPC endpoint ${endpoint} failed (${errorType}). Trying next endpoint...`)
           throw blockhashError // Re-throw to continue to next endpoint
         }
+        
         // Fallback for older Solana web3.js versions
         try {
           await connection.getRecentBlockhash('finalized')
-        } catch {
+        } catch (fallbackError) {
+          const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          
+          // Check if fallback also has network/StructError
+          const isFallbackNetworkError = 
+            fallbackMsg.includes('Failed to fetch') ||
+            fallbackMsg.includes('NetworkError') ||
+            fallbackMsg.includes('fetch failed') ||
+            fallbackMsg.includes('TypeError')
+          
+          const isFallbackStructError = 
+            fallbackMsg.includes('StructError') || 
+            fallbackMsg.includes('Expected the value to satisfy')
+          
+          if (isFallbackNetworkError || isFallbackStructError) {
+            const errorType = isFallbackStructError ? 'unexpected response format' : 'network error'
+            console.warn(`⚠️ RPC endpoint ${endpoint} failed (${errorType}). Trying next endpoint...`)
+            throw fallbackError
+          }
           // If both fail, it's likely a network/CSP issue
           throw blockhashError
         }
@@ -81,21 +122,29 @@ export async function getSolanaConnectionWithFallback(
         }
       }
       
-      // Check if it's a network/connectivity error
+      // Check if it's a network/connectivity error or StructError (RPC format mismatch)
       const isNetworkError = 
         errorMessage.includes('Failed to fetch') ||
         errorMessage.includes('NetworkError') ||
         errorMessage.includes('fetch failed') ||
         errorMessage.includes('ECONNREFUSED') ||
-        errorMessage.includes('ETIMEDOUT')
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('TypeError') ||
+        errorMessage.includes('CORS') ||
+        errorMessage.includes('Cross-Origin')
       
-      // If it's a network error and we have more endpoints, continue
-      if (isNetworkError && i < SOLANA_RPC_ENDPOINTS.length - 1) {
+      const isStructError = 
+        errorMessage.includes('StructError') ||
+        errorMessage.includes('Expected the value to satisfy') ||
+        errorMessage.includes('failed to get recent blockhash')
+      
+      // If it's a network error or StructError and we have more endpoints, continue
+      if ((isNetworkError || isStructError) && i < SOLANA_RPC_ENDPOINTS.length - 1) {
         continue
       }
       
-      // If it's not a network error or we're on the last endpoint, break
-      if (!isNetworkError) {
+      // If it's not a network/StructError or we're on the last endpoint, break
+      if (!isNetworkError && !isStructError) {
         break
       }
     }
