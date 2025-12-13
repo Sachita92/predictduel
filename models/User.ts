@@ -99,6 +99,7 @@ const UserSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    collection: 'users', // Explicitly set collection name to 'users'
   }
 )
 

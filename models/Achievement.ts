@@ -62,6 +62,7 @@ const AchievementSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    collection: 'achievements',
   }
 )
 

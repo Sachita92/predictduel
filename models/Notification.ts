@@ -53,6 +53,7 @@ const NotificationSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    collection: 'notifications',
   }
 )
 

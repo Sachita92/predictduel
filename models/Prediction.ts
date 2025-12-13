@@ -135,6 +135,7 @@ const PredictionSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    collection: 'predictions',
   }
 )
 
