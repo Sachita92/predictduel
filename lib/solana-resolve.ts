@@ -54,6 +54,29 @@ async function initializeClient(provider: any): Promise<PredictDuelClient> {
 }
 
 /**
+ * Fetch market account to verify creator address
+ */
+export async function fetchMarketAccount(
+  provider: any,
+  marketPda: string
+): Promise<{ creator: string } | null> {
+  try {
+    const client = await initializeClient(provider)
+    const marketPubkey = new PublicKey(marketPda)
+    
+    // Use the client's fetchMarket method
+    const marketAccount = await client.fetchMarket(marketPubkey)
+    
+    return {
+      creator: marketAccount.creator.toString(),
+    }
+  } catch (error) {
+    console.error('Error fetching market account:', error)
+    return null
+  }
+}
+
+/**
  * Resolve a prediction market
  * 
  * @param provider - Solana wallet provider (from window.solana or Privy)
@@ -73,11 +96,28 @@ export async function resolveMarketOnChain(
       throw new Error('Market PDA is required')
     }
     
+    if (!provider.publicKey) {
+      throw new Error('Wallet not connected. Please connect your wallet.')
+    }
+    
     // Initialize client
     const client = await initializeClient(provider)
     
     // Convert market PDA string to PublicKey
     const marketPda = new PublicKey(resolveData.marketPda)
+    
+    // Verify the creator address matches before attempting to resolve
+    const connectedWalletAddress = provider.publicKey.toString()
+    const marketAccount = await fetchMarketAccount(provider, resolveData.marketPda)
+    
+    if (marketAccount && marketAccount.creator !== connectedWalletAddress) {
+      throw new Error(
+        `Unauthorized: Only the creator can resolve this market. ` +
+        `Market creator: ${marketAccount.creator.slice(0, 8)}...${marketAccount.creator.slice(-8)}, ` +
+        `Connected wallet: ${connectedWalletAddress.slice(0, 8)}...${connectedWalletAddress.slice(-8)}. ` +
+        `Please connect the wallet that was used to create this market.`
+      )
+    }
     
     // Resolve market on-chain
     const signature = await client.resolveMarket(marketPda, resolveData.outcome)

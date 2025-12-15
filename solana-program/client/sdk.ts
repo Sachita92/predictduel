@@ -560,6 +560,17 @@ export class PredictDuelClient {
   }
 
   /**
+   * Fetch market account to get creator address
+   */
+  async fetchMarket(marketPda: PublicKey): Promise<{ creator: PublicKey }> {
+    // @ts-ignore - TypeScript doesn't know the account structure from IDL
+    const marketAccount = await this.program.account.market.fetch(marketPda);
+    return {
+      creator: marketAccount.creator as PublicKey,
+    };
+  }
+
+  /**
    * Claim winnings from a resolved market
    */
   async claimWinnings(marketPda: PublicKey): Promise<string> {

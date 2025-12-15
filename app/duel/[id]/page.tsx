@@ -319,6 +319,21 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
       }
       
+      // Step 1.5: Verify the connected wallet matches the creator's wallet
+      const connectedWalletAddress = solanaProvider.publicKey?.toString()
+      const creatorWalletAddress = duel.creator.walletAddress
+      
+      if (!connectedWalletAddress) {
+        throw new Error('Could not get wallet address. Please ensure your wallet is connected.')
+      }
+      
+      if (creatorWalletAddress && connectedWalletAddress !== creatorWalletAddress) {
+        throw new Error(
+          `Wallet mismatch! This duel was created with wallet ${creatorWalletAddress.slice(0, 8)}...${creatorWalletAddress.slice(-8)}. ` +
+          `Please connect the same wallet that was used to create this duel (currently connected: ${connectedWalletAddress.slice(0, 8)}...${connectedWalletAddress.slice(-8)}).`
+        )
+      }
+      
       // Step 2: Resolve market on-chain
       const onChainResult = await resolveMarketOnChain(solanaProvider, {
         marketPda: duel.marketPda,
