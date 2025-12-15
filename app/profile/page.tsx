@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Edit, Trophy, TrendingUp, Target, Award, Loader2, Wallet, MoreVertical, Trash2, X } from 'lucide-react'
 import { usePrivy } from '@privy-io/react-auth'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
 import Card from '@/components/ui/Card'
@@ -56,8 +56,9 @@ interface CategoryStat {
   color: string
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { ready, authenticated, user } = usePrivy()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
@@ -66,6 +67,10 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [balance, setBalance] = useState<number | null>(null)
   const [loadingBalance, setLoadingBalance] = useState(true)
+  
+  // Check if viewing someone else's profile
+  const viewingOtherProfile = searchParams.get('privyId') && searchParams.get('privyId') !== user?.id
+  const profilePrivyId = viewingOtherProfile ? searchParams.get('privyId') : user?.id
   const [editForm, setEditForm] = useState({
     name: '',
     username: '',
@@ -121,12 +126,13 @@ export default function ProfilePage() {
   }, [user?.id, walletAddress])
 
   const fetchProfile = useCallback(async () => {
-    if (!user?.id) return
+    const targetPrivyId = profilePrivyId
+    if (!targetPrivyId) return
     
     try {
       setLoading(true)
       const response = await fetch(
-        `/api/profile?privyId=${user.id}&walletAddress=${walletAddress}`
+        `/api/profile?privyId=${targetPrivyId}`
       )
       const data = await response.json()
 
@@ -141,8 +147,8 @@ export default function ProfilePage() {
           avatar: data.user.avatar || '',
         })
         setAvatarPreview(data.user.avatar || null)
-      } else {
-        // User doesn't exist, auto-create profile
+      } else if (!viewingOtherProfile) {
+        // User doesn't exist, auto-create profile (only for own profile)
         await createProfile()
       }
     } catch (error) {
@@ -150,23 +156,23 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, walletAddress, createProfile])
+  }, [profilePrivyId, viewingOtherProfile, createProfile])
 
   useEffect(() => {
-    if (ready && !authenticated) {
+    if (ready && !authenticated && !viewingOtherProfile) {
       router.push('/login')
     }
-  }, [ready, authenticated, router])
+  }, [ready, authenticated, router, viewingOtherProfile])
 
   useEffect(() => {
-    if (ready && authenticated && user?.id) {
+    if (ready && (authenticated || viewingOtherProfile)) {
       fetchProfile()
     }
-  }, [ready, authenticated, user?.id, fetchProfile])
+  }, [ready, authenticated, viewingOtherProfile, fetchProfile])
 
-  // Fetch wallet balance
+  // Fetch wallet balance (only for own profile)
   useEffect(() => {
-    if (walletAddress) {
+    if (walletAddress && !viewingOtherProfile) {
       const fetchBalance = async () => {
         try {
           setLoadingBalance(true)
@@ -180,7 +186,7 @@ export default function ProfilePage() {
       }
       fetchBalance()
     }
-  }, [walletAddress])
+  }, [walletAddress, viewingOtherProfile])
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -462,7 +468,7 @@ export default function ProfilePage() {
                   <p className="text-white/60 mb-2">
                     {profile.bio || 'No bio yet'}
                   </p>
-                  {walletAddress && (
+                  {walletAddress && !viewingOtherProfile && (
                     <>
                       <p className="text-xs text-white/40 mb-2 font-mono">
                         {walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}
@@ -490,19 +496,23 @@ export default function ProfilePage() {
                       <div className="text-2xl font-bold text-danger">{profile.stats.losses}</div>
                       <div className="text-sm text-white/60">Losses</div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-bold text-accent">
-                        {profile.stats.totalEarned.toFixed(2)} {currency}
+                    {!viewingOtherProfile && (
+                      <div>
+                        <div className="text-2xl font-bold text-accent">
+                          {profile.stats.totalEarned.toFixed(2)} {currency}
+                        </div>
+                        <div className="text-sm text-white/60">Total Earned</div>
                       </div>
-                      <div className="text-sm text-white/60">Total Earned</div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Edit size={16} className="mr-2" />
-                Edit Profile
-              </Button>
+              {!viewingOtherProfile && (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Edit size={16} className="mr-2" />
+                  Edit Profile
+                </Button>
+              )}
             </div>
           )}
         </Card>
@@ -676,20 +686,20 @@ export default function ProfilePage() {
                       >
                         {activity.outcome}
                       </Badge>
-                      {(activity.outcome === 'Won' || activity.outcome === 'Lost') && (
+                      {!viewingOtherProfile && (activity.outcome === 'Won' || activity.outcome === 'Lost') && (
                         <div className={`text-sm mt-1 ${activity.outcome === 'Won' ? 'text-success' : 'text-danger'}`}>
                           {activity.outcome === 'Won' ? '+' : '-'}{activity.amount.toFixed(2)} {currency}
                         </div>
                       )}
-                      {activity.outcome === 'Active' && (
+                      {!viewingOtherProfile && activity.outcome === 'Active' && (
                         <div className="text-sm mt-1 text-white/60">
                           Stake: {activity.amount.toFixed(2)} {currency}
                         </div>
                       )}
                     </div>
                     
-                    {/* Three-dot menu - only show if user is creator and duel is pending/active */}
-                    {activity.isCreator && (activity.status === 'pending' || activity.status === 'active') && (
+                    {/* Three-dot menu - only show if user is creator and duel is pending/active and viewing own profile */}
+                    {!viewingOtherProfile && activity.isCreator && (activity.status === 'pending' || activity.status === 'active') && (
                       <div className="relative">
                         <button
                           type="button"
@@ -902,6 +912,22 @@ export default function ProfilePage() {
       
       <MobileNav />
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background-dark pb-20">
+        <TopNav />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-12 h-12 animate-spin text-primary-from" />
+        </div>
+        <MobileNav />
+      </div>
+    }>
+      <ProfilePageContent />
+    </Suspense>
   )
 }
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
-import Duel from '@/models/Duel'
+import mongoose from 'mongoose'
 import User from '@/models/User'
+import Duel from '@/models/Duel'
 
 /**
  * API Route to Get All Public Duels
@@ -12,6 +13,12 @@ export async function GET(req: NextRequest) {
   try {
     // Connect to the database
     await connectDB()
+    
+    // Ensure User model is registered (needed for populate to work)
+    // Explicitly check that the model is registered in mongoose.models
+    if (!mongoose.models.User) {
+      throw new Error('User model not registered. Please ensure User model is imported.')
+    }
 
     // Get query parameters
     const { searchParams } = new URL(req.url)

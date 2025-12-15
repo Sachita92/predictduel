@@ -395,12 +395,6 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                               <span>{user.stats.wins} wins</span>
                               <span>•</span>
                               <span>{user.stats.winRate.toFixed(0)}% win rate</span>
-                              {user.stats.totalEarned > 0 && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-success">{user.stats.totalEarned.toFixed(2)} SOL earned</span>
-                                </>
-                              )}
                             </div>
                           </div>
                           <User size={20} className="text-white/40" />
