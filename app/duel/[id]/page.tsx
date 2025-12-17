@@ -252,9 +252,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setBetSuccess(true)
       setHasVoted(true) // Immediately mark as voted to disable buttons
       
-      // Refresh duel data
+      // Refresh duel data without a full reload
+      await fetchDuel()
+
+      // Clear success state after a short delay (no refetch)
       setTimeout(() => {
-        fetchDuel()
         setBetSuccess(false)
       }, 2000)
       
@@ -265,7 +267,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsBetting(false)
     }
-  }, [duel, user, walletAddress, id, betAmount, currentUserId])
+  }, [duel, user, walletAddress, id, betAmount, currentUserId, fetchDuel])
   
   const handleResolve = useCallback(async (outcome: 'yes' | 'no') => {
     if (!duel || !user || !walletAddress) {
@@ -362,11 +364,13 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setResolveSuccess(true)
       setShowResolveModal(false)
       
-      // Refresh duel data
+      // Refresh duel data without unnecessary reloads
+      await fetchDuel()
+
+      // Clear success state after a short delay (no refetch)
       setTimeout(() => {
-        fetchDuel()
         setResolveSuccess(false)
-      }, 2000)
+      }, 1500)
       
     } catch (error) {
       console.error('Error resolving duel:', error)
@@ -374,7 +378,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsResolving(false)
     }
-  }, [duel, user, walletAddress, id, wallets])
+  }, [duel, user, walletAddress, id, wallets, fetchDuel])
   
   const handleClaim = useCallback(async () => {
     if (!duel || !user || !walletAddress) {
@@ -478,9 +482,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setClaimSuccess(true)
       setClaimTransactionSignature(onChainResult.signature)
       
-      // Refresh duel data
+      // Refresh duel data without unnecessary reloads
+      await fetchDuel()
+
+      // Clear success indicators after a short delay (no refetch)
       setTimeout(() => {
-        fetchDuel()
         setClaimSuccess(false)
         setClaimTransactionSignature(null)
       }, 3000)
@@ -509,7 +515,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsClaiming(false)
     }
-  }, [duel, user, walletAddress, userParticipation, id, wallets])
+  }, [duel, user, walletAddress, userParticipation, id, wallets, fetchDuel])
   
   // Claim handler for Winners section (uses participant directly)
   const handleClaimForParticipant = useCallback(async (participant: any) => {
@@ -625,9 +631,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setClaimSuccess(true)
       setClaimTransactionSignature(onChainResult.signature)
       
-      // Refresh duel data
+      // Refresh duel data without unnecessary reloads
+      await fetchDuel()
+
+      // Clear success indicators after a short delay (no refetch)
       setTimeout(() => {
-        fetchDuel()
         setClaimSuccess(false)
         setClaimTransactionSignature(null)
       }, 3000)

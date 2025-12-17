@@ -19,6 +19,7 @@ const categories = [
   { id: 'weather', icon: '⛅', label: 'Weather' },
   { id: 'sports', icon: '⚽', label: 'Sports' },
   { id: 'meme', icon: '🎭', label: 'Meme/Fun' },
+  { id: 'other', icon: '❓', label: 'Other' },
 ]
 
 const quickDeadlines = [
