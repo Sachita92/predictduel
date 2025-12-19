@@ -121,7 +121,9 @@ export default function CreatePage() {
       // Try window.solana first (Phantom, Solflare, etc.)
       if (typeof window !== 'undefined' && (window as any).solana) {
         const provider = (window as any).solana
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
+            (provider.connect && typeof provider.connect === 'function')) {
           // Check if already connected with publicKey
           if (provider.isConnected && provider.publicKey) {
             // Verify publicKey is valid

@@ -144,7 +144,9 @@ export default function DuelsPage() {
       
       if (typeof window !== 'undefined' && (window as any).solana) {
         const provider = (window as any).solana
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack) {
+        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
+        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
+            (provider.connect && typeof provider.connect === 'function')) {
           if (provider.isConnected && provider.publicKey) {
             solanaProvider = provider
           } else {
