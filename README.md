@@ -1,6 +1,8 @@
 # PredictDuel - Social Prediction Market Platform
 
-A modern, playful, and highly engaging web interface for PredictDuel - a social prediction market dapp on Solana where users challenge friends to prediction battles and win cryptocurrency instantly.
+PredictDuel is a social prediction market dApp on Solana where users challenge friends to prediction battles and win cryptocurrency on-chain. 
+
+The project focuses on real-world Solana integration: wallet-based transactions, Anchor program interaction, PDA-managed accounts, and syncing on-chain state with a responsive Web3 frontend.
 
 ## Features
 
@@ -39,6 +41,8 @@ A modern, playful, and highly engaging web interface for PredictDuel - a social 
 - **MongoDB** - Database for storing duels, users, and notifications
 - **Mongoose** - MongoDB ODM
 - **Next.js API Routes** - RESTful API endpoints
+
+Note: MongoDB is used only for off-chain metadata, indexing, and UI performance. All funds and settlement logic are enforced on-chain by the Solana program.
 
 ### Blockchain
 - **Solana** - Blockchain for prediction markets
@@ -212,6 +216,28 @@ NEXT_PUBLIC_SOLANA_RPC_URL=your_rpc_url  # optional, uses default if not set
 # Program ID (if deploying custom program)
 NEXT_PUBLIC_PROGRAM_ID=your_program_id
 ```
+
+## Solana Architecture Overview
+
+- Markets, vaults, and user positions are managed using PDAs
+- All instructions are executed through Anchor and IDL-based clients
+- Transactions are signed via connected wallets
+- On-chain state is indexed into MongoDB for fast UI rendering
+- Resolution and claim logic is fully enforced by the Solana program
+
+## What I Built & Own
+
+I designed and implemented the full Web3 flow of PredictDuel, including:
+
+- Wallet-based user flows (connect, sign, transact)
+- Anchor IDL-driven interaction with the Solana program
+- PDA-based market, vault, and user position handling
+- On-chain transaction flows for create → bet → resolve → claim
+- Reliable RPC reads and transaction confirmation handling
+- Indexing on-chain state into MongoDB for fast UI updates
+- Frontend state synchronization with on-chain outcomes
+
+This project helped me deeply understand how real Solana applications work end-to-end, from wallet interaction to program execution and UI updates.
 
 ## License
 
