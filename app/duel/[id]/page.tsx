@@ -79,6 +79,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [claimTransactionSignature, setClaimTransactionSignature] = useState<string | null>(null)
   
+  // Delete duel state
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  
   const walletAddress = useMemo(() => getWalletAddress(user, APP_BLOCKCHAIN), [user])
   const currency = useMemo(() => getAppCurrency(), [])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -118,6 +123,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const canResolve = useMemo(() => 
     isCreator && isDeadlinePassed && duel?.status !== 'resolved' && duel?.status !== 'cancelled',
     [isCreator, isDeadlinePassed, duel?.status]
+  )
+  
+  // Delete conditions - can delete if no votes (yesCount === 0 && noCount === 0)
+  const canDelete = useMemo(() => 
+    isCreator && duel && duel.yesCount === 0 && duel.noCount === 0 && duel.participants.length === 0,
+    [isCreator, duel]
   )
   
   // Removed debug logging useEffect to reduce re-renders
@@ -673,6 +684,37 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setIsClaiming(false)
     }
   }, [duel, user, walletAddress, currentUserId, id, wallets, fetchDuel])
+  
+  const handleDelete = useCallback(async () => {
+    if (!duel || !user) {
+      setDeleteError('Please connect your wallet')
+      return
+    }
+    
+    setIsDeleting(true)
+    setDeleteError(null)
+    
+    try {
+      const response = await fetch(`/api/duels/${id}?privyId=${user.id}`, {
+        method: 'DELETE',
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete duel')
+      }
+      
+      // Redirect to duels page after successful deletion
+      router.push('/duels')
+      
+    } catch (error) {
+      console.error('Error deleting duel:', error)
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete duel')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [duel, user, id, router])
   
   // All hooks must be called before any early returns
   const deadline = useMemo(() => duel ? new Date(duel.deadline) : new Date(), [duel?.deadline])
@@ -1301,6 +1343,35 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
             
+            {canDelete && (
+              <div className="mt-4">
+                {deleteError && (
+                  <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                    {deleteError}
+                  </div>
+                )}
+                
+                <Button
+                  onClick={() => setShowDeleteModal(true)}
+                  disabled={isDeleting}
+                  className="w-full"
+                  variant="destructive"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2" size={20} />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <X size={18} className="mr-2" />
+                      Delete Duel
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+            
             {duel?.status === 'resolved' && (
               <div className="mt-4 text-center">
                 <Badge variant="info" className="text-lg px-4 py-2">
@@ -1397,6 +1468,66 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     </>
                   ) : (
                     'Confirm Resolution'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-background-dark border border-white/10 rounded-xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold text-danger">Delete Duel</h3>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setDeleteError(null)
+                  }}
+                  className="text-white/60 hover:text-white transition-colors"
+                  disabled={isDeleting}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <p className="text-white/70 mb-6">
+                Are you sure you want to delete this duel? This action cannot be undone. The duel will be permanently removed.
+              </p>
+              
+              {deleteError && (
+                <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                  {deleteError}
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setDeleteError(null)
+                  }}
+                  disabled={isDeleting}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1"
+                  variant="destructive"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2" size={20} />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Duel'
                   )}
                 </Button>
               </div>

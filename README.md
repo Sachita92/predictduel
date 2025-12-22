@@ -63,10 +63,6 @@ Note: MongoDB is used only for off-chain metadata, indexing, and UI performance.
 - Accent: `#F59E0B`
 - Background: `#0F172A` (dark), `#1E293B` (darker)
 
-### Typography
-- Display: Space Grotesk (headers)
-- Body: Inter (content)
-
 ## Getting Started
 
 1. Install dependencies:

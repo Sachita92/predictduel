@@ -220,8 +220,7 @@ export async function PUT(
 
 /**
  * API Route to Delete a Duel
- * 
- * Only the creator can delete their duel, and only if it has no participants
+ * Only the creator can delete their duel, and only if it has no votes (yesCount === 0 && noCount === 0)
  */
 export async function DELETE(
   req: NextRequest,
@@ -277,10 +276,10 @@ export async function DELETE(
       )
     }
 
-    // Can only delete if no participants
-    if (duel.participants.length > 0) {
+    // Can only delete if no votes (no participants and no yes/no counts)
+    if (duel.participants.length > 0 || duel.yesCount > 0 || duel.noCount > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete duel that has participants' },
+        { error: 'Cannot delete duel that has votes. Only duels with no votes can be deleted.' },
         { status: 400 }
       )
     }
