@@ -10,7 +10,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
-import { getWalletAddress } from '@/lib/privy-helpers'
+import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
 import { resolveMarketOnChain } from '@/lib/solana-resolve'
@@ -196,27 +196,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     setBetSuccess(false)
     
     try {
-      // Step 1: Get Solana wallet provider
+      // Step 1: Get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
       let solanaProvider: any = null
       
-      // Try window.solana first (Phantom, Solflare, etc.)
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            try {
-              await provider.connect()
-              solanaProvider = provider
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-            }
-          }
-        }
-      }
+      solanaProvider = await getSolanaWalletProvider()
       
       // If window.solana not available, try Privy wallets
       if (!solanaProvider && wallets.length > 0) {
@@ -231,7 +214,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Step 2: Place bet on-chain
@@ -298,27 +281,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     setResolveSuccess(false)
     
     try {
-      // Step 1: Get Solana wallet provider
+      // Step 1: Get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
       let solanaProvider: any = null
       
-      // Try window.solana first (Phantom, Solflare, etc.)
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            try {
-              await provider.connect()
-              solanaProvider = provider
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-            }
-          }
-        }
-      }
+      solanaProvider = await getSolanaWalletProvider()
       
       // If window.solana not available, try Privy wallets
       if (!solanaProvider && wallets.length > 0) {
@@ -333,7 +299,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Step 1.5: Verify the connected wallet matches the creator's wallet
@@ -421,27 +387,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     setClaimSuccess(false)
     
     try {
-      // Step 1: Get Solana wallet provider
+      // Step 1: Get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
       let solanaProvider: any = null
       
-      // Try window.solana first (Phantom, Solflare, etc.)
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            try {
-              await provider.connect()
-              solanaProvider = provider
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-            }
-          }
-        }
-      }
+      solanaProvider = await getSolanaWalletProvider()
       
       // If window.solana not available, try Privy wallets
       if (!solanaProvider && wallets.length > 0) {
@@ -456,7 +405,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Step 2: Claim winnings on-chain
@@ -572,27 +521,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     setClaimSuccess(false)
     
     try {
-      // Step 1: Get Solana wallet provider
+      // Step 1: Get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
       let solanaProvider: any = null
       
-      // Try window.solana first (Phantom, Solflare, etc.)
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            try {
-              await provider.connect()
-              solanaProvider = provider
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-            }
-          }
-        }
-      }
+      solanaProvider = await getSolanaWalletProvider()
       
       // If window.solana not available, try Privy wallets
       if (!solanaProvider && wallets.length > 0) {
@@ -607,7 +539,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Step 2: Claim winnings on-chain

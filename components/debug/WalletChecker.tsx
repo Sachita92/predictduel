@@ -149,8 +149,8 @@ export default function WalletChecker() {
                     <strong>⚠️ WARNING:</strong> Ethereum address detected!
                     <ul className="list-disc ml-4 mt-1 space-y-1">
                       <li>This app is SOLANA ONLY</li>
-                      <li>Disconnect and reconnect with Phantom on Solana network</li>
-                      <li>In Phantom, switch from Ethereum to Solana</li>
+                      <li>Disconnect and reconnect with a Solana wallet (Phantom, Solflare, Backpack, or MetaMask with Solana enabled)</li>
+                      <li>Make sure your wallet is on Solana network</li>
                     </ul>
                   </div>
                 </div>
@@ -159,8 +159,8 @@ export default function WalletChecker() {
                   <div className="text-xs text-danger">
                     <strong>❌ No Solana wallet found!</strong>
                     <ul className="list-disc ml-4 mt-1 space-y-1">
-                      <li>Connect with Phantom wallet</li>
-                      <li>Make sure Phantom is on Solana network</li>
+                      <li>Connect with Phantom, Solflare, Backpack, or MetaMask (with Solana enabled)</li>
+                      <li>Make sure your wallet is on Solana network</li>
                       <li>Disconnect and reconnect if needed</li>
                     </ul>
                   </div>

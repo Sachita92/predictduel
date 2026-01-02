@@ -10,7 +10,7 @@ import MobileNav from '@/components/navigation/MobileNav'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
-import { getWalletAddress } from '@/lib/privy-helpers'
+import { getWalletAddress, getSolanaWalletProvider, getWalletName } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN } from '@/lib/blockchain-config'
 import { createMarketOnChain } from '@/lib/solana-market'
 
@@ -86,8 +86,6 @@ export default function CreatePage() {
   }
   
   const handleBack = () => {
-    // If we're on step 1, go back to home page
-    // Otherwise, go back to previous step
     if (step === 1) {
       router.push('/')
     } else {
@@ -95,11 +93,7 @@ export default function CreatePage() {
     }
   }
   
-  /**
-   * This function runs when you click "Launch Duel"
-   * Think of it like mailing a letter - we package up all the information
-   * and send it to our server to save in the database
-   */
+  /*This function runs when you click "Launch Duel"*/
   const handleLaunch = async () => {
     // Step 1: Make sure we have all the required information
     if (!category || !question || !stake) {
@@ -118,72 +112,18 @@ export default function CreatePage() {
       // Step 4: Get Solana wallet provider for on-chain transaction
       let solanaProvider: any = null
       
-      // Try window.solana first (Phantom, Solflare, etc.)
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          // Check if already connected with publicKey
-          if (provider.isConnected && provider.publicKey) {
-            // Verify publicKey is valid
-            if (provider.publicKey.toString && provider.publicKey.toString().length > 0) {
-              solanaProvider = provider
-            }
-          }
-          
-          // If not connected or publicKey is missing, try to connect
-          if (!solanaProvider) {
-            try {
-              // Check if wallet is available and not disconnected
-              if (provider.isConnected === false) {
-                console.log('Wallet not connected, attempting to connect...')
-              }
-              
-              const response = await provider.connect()
-              // After connect, publicKey should be available
-              // Wait a moment for it to be set
-              await new Promise(resolve => setTimeout(resolve, 100))
-              
-              // Verify publicKey is now available
-              if (provider.publicKey && provider.publicKey.toString && provider.publicKey.toString().length > 0) {
-                solanaProvider = provider
-                console.log('✅ Wallet connected successfully')
-              } else {
-                throw new Error('Wallet connected but publicKey is not available')
-              }
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-              const errorMsg = connectError instanceof Error ? connectError.message : String(connectError)
-              
-              // Provide specific error messages
-              if (errorMsg.includes('User rejected') || errorMsg.includes('user rejected')) {
-                throw new Error('Wallet connection was cancelled. Please approve the connection in your wallet.')
-              }
-              if (errorMsg.includes('disconnected') || errorMsg.includes('port')) {
-                throw new Error('Wallet extension is disconnected. Please refresh the page and try again.')
-              }
-              
-              throw new Error(
-                `Failed to connect Solana wallet: ${errorMsg}. ` +
-                `Please make sure your wallet is unlocked and try again.`
-              )
-            }
-          }
-        }
-      }
+      // Try to get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
+      solanaProvider = await getSolanaWalletProvider()
       
       // If window.solana not available, try Privy wallets
       if (!solanaProvider && wallets.length > 0) {
         // Privy wallets might provide access differently
-        // For now, we'll use window.solana as the primary method
         const solanaWallet = wallets.find((w: any) => 
           w.chainType === 'solana' || 
           (w.address && !w.address.startsWith('0x'))
         )
         
         // Note: Privy's wallet structure may need different access
-        // This is a placeholder - you may need to adjust based on Privy's actual API
         if (solanaWallet && typeof window !== 'undefined' && (window as any).solana) {
           const provider = (window as any).solana
           if (provider.publicKey && provider.publicKey.toString && provider.publicKey.toString().length > 0) {
@@ -193,7 +133,7 @@ export default function CreatePage() {
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Final validation: ensure publicKey exists and wallet is connected
@@ -212,9 +152,14 @@ export default function CreatePage() {
       }
       
       // Log for debugging
+      const walletName = getWalletName(solanaProvider)
       console.log('🔍 Wallet Debug Information:')
       console.log('Using Solana provider:', {
+        walletName: walletName,
         isPhantom: solanaProvider.isPhantom,
+        isSolflare: solanaProvider.isSolflare,
+        isBackpack: solanaProvider.isBackpack,
+        isMetaMask: solanaProvider.isMetaMask,
         isConnected: solanaProvider.isConnected,
         publicKey: solanaProvider.publicKey?.toString?.() || 'null',
         publicKeyType: typeof solanaProvider.publicKey,

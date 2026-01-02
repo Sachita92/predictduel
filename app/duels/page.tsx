@@ -10,7 +10,7 @@ import MobileNav from '@/components/navigation/MobileNav'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import { getWalletAddress } from '@/lib/privy-helpers'
+import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
 
@@ -139,26 +139,10 @@ export default function DuelsPage() {
     setBetSuccess(null)
     
     try {
-      // Get Solana wallet provider
+      // Get Solana wallet provider (supports Phantom, Solflare, Backpack, MetaMask, etc.)
       let solanaProvider: any = null
       
-      if (typeof window !== 'undefined' && (window as any).solana) {
-        const provider = (window as any).solana
-        // Support Phantom, Solflare, Backpack, MetaMask, and any wallet implementing Solana standard
-        if (provider.isPhantom || provider.isSolflare || provider.isBackpack || 
-            (provider.connect && typeof provider.connect === 'function')) {
-          if (provider.isConnected && provider.publicKey) {
-            solanaProvider = provider
-          } else {
-            try {
-              await provider.connect()
-              solanaProvider = provider
-            } catch (connectError) {
-              console.error('Failed to connect wallet:', connectError)
-            }
-          }
-        }
-      }
+      solanaProvider = await getSolanaWalletProvider()
       
       if (!solanaProvider && wallets.length > 0) {
         const solanaWallet = wallets.find((w: any) => 
@@ -172,7 +156,7 @@ export default function DuelsPage() {
       }
       
       if (!solanaProvider) {
-        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom.')
+        throw new Error('No Solana wallet found. Please install and connect a Solana wallet like Phantom, Solflare, Backpack, or MetaMask (with Solana enabled).')
       }
       
       // Place bet on-chain

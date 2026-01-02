@@ -178,3 +178,88 @@ export function detectChainFromAddress(address: string | null | undefined): Bloc
   return null
 }
 
+/**
+ * Get Solana wallet provider from browser
+ * Supports Phantom, Solflare, Backpack, MetaMask (with Solana enabled), and any wallet implementing Solana standard
+ * 
+ * @returns Solana wallet provider or null if not found
+ */
+export async function getSolanaWalletProvider(): Promise<any | null> {
+  if (typeof window === 'undefined') return null
+  
+  const windowAny = window as any
+  
+  // Try window.solana first (Phantom, Solflare, Backpack, MetaMask with Solana, etc.)
+  if (windowAny.solana) {
+    const provider = windowAny.solana
+    
+    // Check for specific wallet types
+    const isSupportedWallet = 
+      provider.isPhantom || 
+      provider.isSolflare || 
+      provider.isBackpack || 
+      provider.isMetaMask || // MetaMask with Solana support
+      (provider.connect && typeof provider.connect === 'function')
+    
+    if (isSupportedWallet) {
+      // If already connected with publicKey, return it
+      if (provider.isConnected && provider.publicKey) {
+        const pubKeyStr = provider.publicKey.toString?.() || String(provider.publicKey)
+        if (pubKeyStr && pubKeyStr.length > 0) {
+          return provider
+        }
+      }
+      
+      // Try to connect
+      try {
+        await provider.connect()
+        // Wait a moment for publicKey to be set
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        if (provider.publicKey) {
+          const pubKeyStr = provider.publicKey.toString?.() || String(provider.publicKey)
+          if (pubKeyStr && pubKeyStr.length > 0) {
+            return provider
+          }
+        }
+      } catch (error) {
+        // Connection failed or was rejected
+        console.warn('Failed to connect Solana wallet:', error)
+      }
+    }
+  }
+  
+  // Try window.ethereum as fallback (MetaMask might expose Solana through ethereum in some cases)
+  // Note: This is less common, but some MetaMask versions might support it
+  if (windowAny.ethereum?.isMetaMask && windowAny.ethereum?.solana) {
+    try {
+      const provider = windowAny.ethereum.solana
+      if (provider.connect && typeof provider.connect === 'function') {
+        await provider.connect()
+        await new Promise(resolve => setTimeout(resolve, 100))
+        if (provider.publicKey) {
+          return provider
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to connect MetaMask Solana provider:', error)
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Get wallet name from provider
+ */
+export function getWalletName(provider: any): string {
+  if (!provider) return 'Unknown'
+  
+  if (provider.isPhantom) return 'Phantom'
+  if (provider.isSolflare) return 'Solflare'
+  if (provider.isBackpack) return 'Backpack'
+  if (provider.isMetaMask) return 'MetaMask'
+  
+  return 'Solana Wallet'
+}
+

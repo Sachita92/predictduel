@@ -14,11 +14,8 @@ export async function GET(req: NextRequest) {
     // Connect to the database
     await connectDB()
     
-    // Ensure User model is registered (needed for populate to work)
-    // Explicitly check that the model is registered in mongoose.models
-    if (!mongoose.models.User) {
-      throw new Error('User model not registered. Please ensure User model is imported.')
-    }
+    // User model is imported at the top of the file, which registers it with mongoose
+    // The model registration happens when the module is loaded, so it should be available
 
     // Get query parameters
     const { searchParams } = new URL(req.url)

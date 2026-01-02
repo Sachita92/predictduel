@@ -26,7 +26,7 @@ export default function PrivyProviderWrapper({
           requireUserPasswordOnCreate: false,
         },
 
-        // Solana wallet connectors - this enables Phantom, Solflare, etc.
+        // Solana wallet connectors - this enables Phantom, Solflare, Backpack, MetaMask (with Solana enabled), etc.
         externalWallets: {
           solana: {
             connectors: toSolanaWalletConnectors(),
