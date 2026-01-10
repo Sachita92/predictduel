@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FaWallet } from 'react-icons/fa'
+import { getWalletAddress, detectChainFromAddress } from '@/lib/privy-helpers'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -15,6 +16,50 @@ export default function LoginPage() {
   useEffect(() => {
     const checkOnboardingAndRedirect = async () => {
       if (ready && authenticated && user?.id) {
+        // First, verify that the user connected with a Solana wallet
+        const walletAddress = getWalletAddress(user, 'solana')
+        const chainType = walletAddress ? detectChainFromAddress(walletAddress) : null
+        
+        // Check all linked accounts for non-Solana wallets
+        if (user.linkedAccounts && user.linkedAccounts.length > 0) {
+          for (const account of user.linkedAccounts) {
+            if (account.type === 'wallet' && account.address) {
+              const detectedChain = detectChainFromAddress(account.address)
+              if (detectedChain && detectedChain !== 'solana') {
+                setLoginError(
+                  `❌ This app only supports Solana wallets!\n\n` +
+                  `You connected with a ${detectedChain} wallet. Please disconnect and connect with a Solana wallet ` +
+                  `(Phantom, Solflare, or Backpack) to continue.`
+                )
+                return // Don't proceed with onboarding check
+              }
+            }
+          }
+        }
+        
+        // Check default wallet if it exists
+        if (user.wallet?.address) {
+          const detectedChain = detectChainFromAddress(user.wallet.address)
+          if (detectedChain && detectedChain !== 'solana') {
+            setLoginError(
+              `❌ This app only supports Solana wallets!\n\n` +
+              `You connected with a ${detectedChain} wallet. Please disconnect and connect with a Solana wallet ` +
+              `(Phantom, Solflare, or Backpack) to continue.`
+            )
+            return // Don't proceed with onboarding check
+          }
+        }
+        
+        // Check if no Solana wallet is found
+        if (!walletAddress || chainType !== 'solana') {
+          setLoginError(
+            `❌ No Solana wallet detected!\n\n` +
+            `This app only supports Solana wallets. Please connect with a Solana wallet ` +
+            `(Phantom, Solflare, or Backpack) to continue.`
+          )
+          return // Don't proceed with onboarding check
+        }
+        
         try {
           console.log('Checking onboarding status for user:', user.id)
           // Check if user has completed onboarding in database
@@ -39,7 +84,7 @@ export default function LoginPage() {
     }
 
     checkOnboardingAndRedirect()
-  }, [ready, authenticated, user?.id, router])
+  }, [ready, authenticated, user, router])
 
   const handleLogin = async () => {
     setLoginError(null)
@@ -55,9 +100,14 @@ export default function LoginPage() {
       if (error.message?.includes('rejected')) {
         setLoginError('❌ You cancelled the connection. Please try again and approve the connection in your wallet.')
       } else if (error.message?.includes('No wallet')) {
-        setLoginError('❌ No Solana wallet detected. Please install Phantom wallet.')
+        setLoginError('❌ No Solana wallet detected. Please install a Solana wallet (Phantom, Solflare, or Backpack).')
       } else if (error.message?.includes('network')) {
-        setLoginError('❌ Network error. Make sure Phantom is on Solana network (not Ethereum).')
+        setLoginError('❌ Network error. Make sure your wallet is on Solana network (not Ethereum).')
+      } else if (error.message?.includes('ethereum') || error.message?.includes('Ethereum')) {
+        setLoginError(
+          '❌ This app only supports Solana wallets!\n\n' +
+          'Please disconnect and connect with a Solana wallet (Phantom, Solflare, or Backpack).'
+        )
       } else {
         setLoginError(`❌ Login failed: ${error.message || 'Unknown error'}`)
       }
@@ -94,7 +144,7 @@ export default function LoginPage() {
             animate={{ opacity: 1 }}
             className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-6"
           >
-            <p className="text-red-300 text-sm">{loginError}</p>
+            <p className="text-red-300 text-sm whitespace-pre-line">{loginError}</p>
           </motion.div>
         )}
 

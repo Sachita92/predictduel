@@ -13,37 +13,36 @@ export default function PrivyProviderWrapper({
 
   useEffect(() => {
     // Re-detect connectors after component mounts to catch wallets that load asynchronously
-    // This helps detect wallets like MetaMask that might not be immediately available
+    // This helps detect Solana wallets like Solflare and Backpack that might load after Phantom
     const detectWallets = () => {
       const connectors = toSolanaWalletConnectors()
       setSolanaConnectors(connectors)
       
-      // Log detected wallets for debugging
+      // Log detected Solana wallets for debugging
       if (typeof window !== 'undefined') {
         const windowAny = window as any
         const detectedWallets = {
           phantom: !!windowAny.solana?.isPhantom,
           solflare: !!windowAny.solana?.isSolflare,
           backpack: !!windowAny.solana?.isBackpack,
-          metamaskSolana: !!windowAny.solana?.isMetaMask,
-          metamaskEthereum: !!windowAny.ethereum?.isMetaMask,
           windowSolana: !!windowAny.solana,
+          // Check for non-Solana wallets (these should not be used)
+          metamaskEthereum: !!windowAny.ethereum?.isMetaMask,
           windowEthereum: !!windowAny.ethereum,
         }
         
-        console.log('🔍 Wallet Detection:', {
+        console.log('🔍 Solana Wallet Detection:', {
           connectors,
           detectedWallets,
+          connectorCount: Object.keys(connectors || {}).length,
         })
         
-        // Helpful message if MetaMask is detected but not via window.solana
-        if (detectedWallets.metamaskEthereum && !detectedWallets.metamaskSolana && !detectedWallets.windowSolana) {
-          console.warn(
-            '⚠️ MetaMask detected but Solana support may not be enabled.\n' +
-            'To use MetaMask with Solana:\n' +
-            '1. Ensure MetaMask has Solana support enabled\n' +
-            '2. MetaMask must expose itself via window.solana for Privy to detect it\n' +
-            '3. Try refreshing the page after enabling Solana support in MetaMask'
+        // Warn if non-Solana wallets are detected
+        if (detectedWallets.metamaskEthereum || detectedWallets.windowEthereum) {
+          console.info(
+            'ℹ️ Non-Solana wallets detected (MetaMask, etc.).\n' +
+            'This app only supports Solana wallets (Phantom, Solflare, Backpack).\n' +
+            'Please use a Solana wallet to connect.'
           )
         }
       }
@@ -83,6 +82,9 @@ export default function PrivyProviderWrapper({
           accentColor: '#8B5CF6',
           showWalletLoginFirst: true,
           walletChainType: 'solana-only',
+          // Explicitly list Solana wallets to show
+          // This ensures all detected Solana wallets appear in the login modal
+          walletList: ['phantom', 'solflare', 'backpack', 'wallet_connect'] as any,
         },
 
         embeddedWallets: {
@@ -90,9 +92,9 @@ export default function PrivyProviderWrapper({
           requireUserPasswordOnCreate: false,
         },
 
-        // Solana wallet connectors - configured to detect all available wallets
-        // This should detect Phantom, Solflare, Backpack, MetaMask (with Solana enabled), etc.
-        // Note: MetaMask needs to have Solana support enabled and expose itself via window.solana
+        // Solana wallet connectors - configured to detect all available Solana wallets
+        // This detects Phantom, Solflare, Backpack, and other wallets that expose themselves via window.solana
+        // Note: Only Solana wallets are supported. Non-Solana wallets (like MetaMask) will show an error.
         externalWallets: {
           solana: {
             connectors: solanaConnectors,
