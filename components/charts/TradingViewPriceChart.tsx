@@ -20,14 +20,14 @@ export default function TradingViewPriceChart({
   const params = new URLSearchParams({
     symbol: symbol,
     interval: timeframe,
-    theme: 'dark',
+    theme: 'light', // Changed to light theme to match website better
     style: '1',
     locale: 'en',
-    toolbar_bg: '0a0a0a',
+    toolbar_bg: '1E293B', // background-darker color
     enable_publishing: 'false',
     withdateranges: 'false',
     range: '1d',
-    hide_side_toolbar: 'false',
+    hide_side_toolbar: 'true', // Hide drawing tools sidebar
     allow_symbol_change: 'false',
     save_image: 'false',
     calendar: 'false',

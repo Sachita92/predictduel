@@ -102,11 +102,26 @@ export async function placeBetOnChain(
       signature: result.signature,
       participantPda: result.participantPda.toString(),
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error placing bet on-chain:', error)
+    
+    // Preserve original error message for better debugging
+    const errorMessage = error?.message || String(error)
+    const errorLogs = error?.logs || error?.transactionLogs || []
+    
+    // Check if it's a duplicate transaction error
+    if (errorMessage.includes('already been processed') || 
+        errorMessage.includes('already processed') ||
+        (Array.isArray(errorLogs) && errorLogs.some((log: string) => 
+          log.includes('already been processed') || log.includes('already processed')
+        ))) {
+      throw new Error('This transaction has already been processed. Please refresh the page to see your bet.')
+    }
+    
+    // Re-throw with original message if it's an Error, otherwise create new Error
     throw error instanceof Error 
       ? error 
-      : new Error('Failed to place bet on-chain')
+      : new Error(`Failed to place bet on-chain: ${errorMessage}`)
   }
 }
 

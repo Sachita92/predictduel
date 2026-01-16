@@ -85,6 +85,22 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   
+  // Comments state
+  const [comments, setComments] = useState<Array<{
+    id: string
+    text: string
+    createdAt: string
+    user: {
+      id: string
+      username: string
+      avatar: string
+    }
+  }>>([])
+  const [commentText, setCommentText] = useState('')
+  const [isPostingComment, setIsPostingComment] = useState(false)
+  const [isLoadingComments, setIsLoadingComments] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
+  
   const walletAddress = useMemo(() => getWalletAddress(user, APP_BLOCKCHAIN), [user])
   const currency = useMemo(() => getAppCurrency(), [])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -104,13 +120,39 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   }, [user?.id])
   
   // Memoize expensive calculations
-  const userParticipation = useMemo(() => 
-    duel?.participants.find((p) => currentUserId && p.user.id === currentUserId),
-    [duel?.participants, currentUserId]
-  )
+  const userParticipation = useMemo(() => {
+    if (!duel?.participants || !user) return undefined
+    
+    // Try multiple matching strategies for reliability
+    return duel.participants.find((p) => {
+      // Match by MongoDB user ID if available
+      if (currentUserId && p.user.id === currentUserId) return true
+      
+      // Match by wallet address (case-insensitive)
+      if (walletAddress && p.user.walletAddress) {
+        return p.user.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+      }
+      
+      // Match by Privy ID if available in user object
+      // Note: participants might not have privyId, so this is a fallback
+      return false
+    })
+  }, [duel?.participants, currentUserId, user, walletAddress])
   
   const isCreator = useMemo(() => user?.id && duel?.creator.privyId === user.id, [user?.id, duel?.creator.privyId])
-  const hasParticipated = useMemo(() => !!userParticipation || hasVoted, [userParticipation, hasVoted])
+  
+  // Only consider hasParticipated true if we actually found participation OR if we just voted successfully
+  const hasParticipated = useMemo(() => {
+    // If we have userParticipation, definitely participated
+    if (userParticipation) return true
+    
+    // If hasVoted is true, we just voted (optimistic update)
+    // But only trust it if we're authenticated and have user info
+    if (hasVoted && authenticated && user) return true
+    
+    return false
+  }, [userParticipation, hasVoted, authenticated, user])
+  
   const isDuelActive = useMemo(() => duel?.status === 'active' || duel?.status === 'pending', [duel?.status])
   const isDeadlineValid = useMemo(() => duel?.deadline && new Date(duel.deadline) > new Date(), [duel?.deadline])
   const canBet = useMemo(() => 
@@ -160,12 +202,23 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       
       setDuel(data.duel)
       
-      // Sync hasVoted with server state
-      if (currentUserId && data.duel.participants) {
-        const participated = data.duel.participants.some(
-          (p: any) => p.user.id === currentUserId
-        )
+      // Sync hasVoted with server state - check multiple ways
+      if (data.duel.participants && user) {
+        const participated = data.duel.participants.some((p: any) => {
+          // Match by MongoDB user ID
+          if (currentUserId && p.user.id === currentUserId) return true
+          
+          // Match by wallet address (case-insensitive)
+          if (walletAddress && p.user.walletAddress) {
+            return p.user.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+          }
+          
+          return false
+        })
         setHasVoted(participated)
+      } else {
+        // If no user or no participants, reset hasVoted
+        setHasVoted(false)
       }
     } catch (error) {
       console.error('Error fetching duel:', error)
@@ -173,15 +226,76 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsLoading(false)
     }
-  }, [id, currentUserId])
+  }, [id, currentUserId, walletAddress, user])
+  
+  const fetchComments = useCallback(async () => {
+    if (!id) return
+    try {
+      setIsLoadingComments(true)
+      const response = await fetch(`/api/duels/${id}/comments`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch comments')
+      }
+      
+      setComments(data.comments || [])
+    } catch (error) {
+      console.error('Error fetching comments:', error)
+      setCommentError(error instanceof Error ? error.message : 'Failed to load comments')
+    } finally {
+      setIsLoadingComments(false)
+    }
+  }, [id])
   
   useEffect(() => {
     if (id) {
       fetchDuel()
+      fetchComments()
     }
-  }, [id, fetchDuel])
+  }, [id, fetchDuel, fetchComments])
+  
+  const handlePostComment = useCallback(async () => {
+    if (!user || !commentText.trim()) return
+    
+    setIsPostingComment(true)
+    setCommentError(null)
+    
+    try {
+      const response = await fetch(`/api/duels/${id}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privyId: user.id,
+          text: commentText.trim(),
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to post comment')
+      }
+      
+      // Add new comment to the list
+      setComments((prev) => [data.comment, ...prev])
+      setCommentText('')
+    } catch (error) {
+      console.error('Error posting comment:', error)
+      setCommentError(error instanceof Error ? error.message : 'Failed to post comment')
+    } finally {
+      setIsPostingComment(false)
+    }
+  }, [user, commentText, id])
   
   const handleBet = useCallback(async (prediction: 'yes' | 'no') => {
+    // Prevent double-submission
+    if (isBetting) {
+      return
+    }
+    
     if (!duel || !user || !walletAddress) {
       setBetError('Please connect your wallet')
       return
@@ -243,7 +357,19 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to place bet')
+        // Check if error is about duplicate transaction
+        const errorMsg = data.error || 'Failed to place bet'
+        if (errorMsg.includes('already been processed') || errorMsg.includes('already processed')) {
+          // Transaction was successful but we're trying to submit it again
+          // Refresh to get latest state
+          await fetchDuel()
+          setBetError('Transaction may have already been processed. Refreshing...')
+          setTimeout(() => {
+            setBetError(null)
+          }, 3000)
+          return
+        }
+        throw new Error(errorMsg)
       }
       
       setBetSuccess(true)
@@ -259,12 +385,24 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       
     } catch (error) {
       console.error('Error placing bet:', error)
-      setBetError(error instanceof Error ? error.message : 'Failed to place bet')
+      
+      // Handle specific Solana transaction errors
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      if (errorMessage.includes('already been processed') || 
+          errorMessage.includes('already processed') ||
+          errorMessage.includes('Transaction simulation failed')) {
+        // Transaction might have succeeded - refresh to check
+        await fetchDuel()
+        setBetError('Transaction may have already been processed. Please refresh the page to see your bet.')
+      } else {
+        setBetError(errorMessage)
+      }
       // Don't set hasVoted on error, allow retry
     } finally {
       setIsBetting(false)
     }
-  }, [duel, user, walletAddress, id, betAmount, currentUserId, fetchDuel])
+  }, [duel, user, walletAddress, id, betAmount, currentUserId, fetchDuel, isBetting, wallets])
   
   const handleResolve = useCallback(async (outcome: 'yes' | 'no') => {
     if (!duel || !user || !walletAddress) {
@@ -740,7 +878,47 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
           
-          <h1 className="text-3xl md:text-4xl font-bold mb-4 font-display">{duel.question}</h1>
+          {/* Question with Timer and Status on the right */}
+          <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+            <h1 className="text-3xl md:text-4xl font-bold font-display flex-1 min-w-0">{duel.question}</h1>
+            
+            {/* Timer and Status on the right */}
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              {duel.status !== 'resolved' && (
+                <CountdownTimer targetDate={deadline} />
+              )}
+              
+              {(() => {
+                const deadlinePassed = deadlineDate ? new Date() >= deadlineDate : false
+                const isExpired = deadlinePassed && duel.status !== 'resolved'
+                
+                if (isExpired) {
+                  return (
+                    <Badge variant="warning" className="text-sm px-3 py-1">
+                      ⏰ Deadline Passed
+                    </Badge>
+                  )
+                }
+                
+                return (
+                  <Badge 
+                    variant={
+                      duel.status === 'active' ? 'success' :
+                      duel.status === 'resolved' ? 'info' :
+                      duel.status === 'pending' ? 'warning' :
+                      'danger'
+                    }
+                    className="text-sm px-3 py-1"
+                  >
+                    {duel.status === 'active' ? 'Active' :
+                     duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
+                     duel.status === 'pending' ? 'Pending' :
+                     'Cancelled'}
+                  </Badge>
+                )
+              })()}
+            </div>
+          </div>
           
           {/* Resolved Duel Summary Banner */}
           {duel.status === 'resolved' && duel.outcome && (
@@ -783,44 +961,6 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </div>
           )}
-          
-          {duel.status !== 'resolved' && (
-            <div className="flex items-center justify-center mb-4">
-              <CountdownTimer targetDate={deadline} />
-            </div>
-          )}
-          
-          <div className="text-center">
-            {(() => {
-              const deadlinePassed = deadlineDate ? new Date() >= deadlineDate : false
-              const isExpired = deadlinePassed && duel.status !== 'resolved'
-              
-              if (isExpired) {
-                return (
-                  <Badge variant="warning" className="text-lg px-4 py-2">
-                    ⏰ Deadline Passed - Awaiting Resolution
-                  </Badge>
-                )
-              }
-              
-              return (
-                <Badge 
-                  variant={
-                    duel.status === 'active' ? 'success' :
-                    duel.status === 'resolved' ? 'info' :
-                    duel.status === 'pending' ? 'warning' :
-                    'danger'
-                  }
-                  className="text-lg px-4 py-2"
-                >
-                  {duel.status === 'active' ? 'Active' :
-                   duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
-                   duel.status === 'pending' ? 'Pending' :
-                   'Cancelled'}
-                </Badge>
-              )
-            })()}
-          </div>
         </div>
         
         {/* Expired Duel Notice */}
@@ -1543,7 +1683,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         
         {/* Participants List */}
         {duel.participants.length > 0 && (
-          <Card variant="glass" className="p-6">
+          <Card variant="glass" className="p-6 mb-6">
             <h3 className="text-xl font-bold mb-4">
               Participants ({duel.participants.length})
             </h3>
@@ -1576,6 +1716,104 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </Card>
         )}
+        
+        {/* Comments Section */}
+        <Card variant="glass" className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MessageCircle size={20} />
+            <h3 className="text-xl font-bold">
+              Comments ({comments.length})
+            </h3>
+          </div>
+          
+          {/* Post Comment Form */}
+          {authenticated && (
+            <div className="mb-6">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Add a comment..."
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none text-white placeholder-white/40 resize-none"
+                rows={3}
+                maxLength={500}
+                disabled={isPostingComment}
+              />
+              <div className="flex items-center justify-between mt-2">
+                <div className="text-xs text-white/60">
+                  {commentText.length}/500 characters
+                </div>
+                <Button
+                  onClick={handlePostComment}
+                  disabled={isPostingComment || !commentText.trim()}
+                  size="sm"
+                >
+                  {isPostingComment ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2" size={16} />
+                      Posting...
+                    </>
+                  ) : (
+                    'Post Comment'
+                  )}
+                </Button>
+              </div>
+              {commentError && (
+                <div className="mt-2 p-2 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
+                  {commentError}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {!authenticated && (
+            <div className="mb-6 p-4 bg-white/5 rounded-lg text-center text-white/60 text-sm">
+              Please log in to post a comment
+            </div>
+          )}
+          
+          {/* Comments List */}
+          {isLoadingComments ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="animate-spin text-primary-from" size={24} />
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="text-center py-8 text-white/60">
+              No comments yet. Be the first to comment!
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className="p-4 bg-white/5 rounded-lg"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center font-bold text-white flex-shrink-0">
+                      {comment.user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold">@{comment.user.username}</span>
+                        <span className="text-xs text-white/60">
+                          {new Date(comment.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-white/90 whitespace-pre-wrap break-words">
+                        {comment.text}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
       
       <MobileNav />
