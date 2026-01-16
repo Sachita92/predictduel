@@ -10,6 +10,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
+import TradingViewPriceChart from '@/components/charts/TradingViewPriceChart'
 import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
@@ -713,7 +714,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     <div className="min-h-screen bg-background-dark pb-20">
       <TopNav />
       
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Back Button */}
         <div className="mb-4">
           <Button
@@ -847,102 +848,175 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
 
-        {/* Pool Stats */}
-        <Card variant="glass" className="p-6 mb-6">
-          <h3 className="text-xl font-bold mb-4">Pool Statistics</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold gradient-text mb-1">
-                {duel.poolSize.toFixed(2)} {currency}
-              </div>
-              <div className="text-sm text-white/60">Total Pool</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-success mb-1">
-                YES: {duel.yesCount}
-              </div>
-              <div className="text-sm text-white/60">{yesStake.toFixed(2)} {currency}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-danger mb-1">
-                NO: {duel.noCount}
-              </div>
-              <div className="text-sm text-white/60">{noStake.toFixed(2)} {currency}</div>
-            </div>
+        {/* Main Content: Chart + Voting Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Chart Section (Middle - 2 columns on large screens) */}
+          <div className="lg:col-span-2">
+            <Card variant="glass" className="p-6">
+              {/* Extract symbol from question or use default */}
+              {(() => {
+                // Simple symbol extraction 
+                const question = duel.question.toLowerCase()
+                let symbol = 'BINANCE:SOLUSDT' // Default
+                
+                if (question.includes('sol') || question.includes('solana')) {
+                  symbol = 'BINANCE:SOLUSDT'
+                } else if (question.includes('btc') || question.includes('bitcoin')) {
+                  symbol = 'BINANCE:BTCUSDT'
+                } else if (question.includes('eth') || question.includes('ethereum')) {
+                  symbol = 'BINANCE:ETHUSDT'
+                }
+                
+                return <TradingViewPriceChart symbol={symbol} height={600} />
+              })()}
+            </Card>
           </div>
-        </Card>
-        
-        {/* Betting Section */}
-        {authenticated && !isCreator && (
-          <Card variant="glass" className="p-6 mb-6">
-            <h3 className="text-xl font-bold mb-4">Place Your Bet</h3>
-            
-            {!canBet && (
-              <div className="mb-4 p-3 bg-warning/20 border border-warning/30 rounded-lg text-warning text-sm">
-                {hasParticipated 
-                  ? 'You have already placed a bet on this duel.'
-                  : !isDuelActive
-                  ? `This duel is ${duel?.status}. Betting is not available.`
-                  : !isDeadlineValid
-                  ? 'The deadline for this duel has passed.'
-                  : 'Betting is currently unavailable.'}
+          
+          {/* Voting Section (Right Sidebar - 1 column on large screens) */}
+          <div className="lg:col-span-1">
+            <Card variant="glass" className="p-6 sticky top-4">
+              {/* Pool Stats */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-4">Pool Statistics</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-white/70">Total Pool</span>
+                    <span className="text-xl font-bold gradient-text">
+                      {duel.poolSize.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg">
+                    <span className="text-white/70">YES</span>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-success">{duel.yesCount}</div>
+                      <div className="text-xs text-white/60">{yesStake.toFixed(2)} {currency}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-danger/10 rounded-lg">
+                    <span className="text-white/70">NO</span>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-danger">{duel.noCount}</div>
+                      <div className="text-xs text-white/60">{noStake.toFixed(2)} {currency}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-            
-            {betError && (
-              <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm">
-                {betError}
-              </div>
-            )}
-            
-            {betSuccess && (
-              <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-sm">
-                ✓ Bet placed successfully! Refreshing...
-              </div>
-            )}
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Stake Amount ({currency})</label>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={betAmount}
-                onChange={(e) => setBetAmount(parseFloat(e.target.value) || 0.01)}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none"
-                disabled={isBetting || !canBet}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                className="h-20 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                onClick={handleYesBet}
-                disabled={isBetting || !canBet}
-              >
-                {isBetting && selectedPrediction === 'yes' ? (
-                  <Loader2 className="animate-spin" size={24} />
-                ) : (
-                  'YES'
-                )}
-              </button>
               
-              <button
-                type="button"
-                className="h-20 text-xl font-bold bg-danger hover:bg-red-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                onClick={handleNoBet}
-                disabled={isBetting || !canBet}
-              >
-                {isBetting && selectedPrediction === 'no' ? (
-                  <Loader2 className="animate-spin" size={24} />
-                ) : (
-                  'NO'
-                )}
-              </button>
-            </div>
-          </Card>
-        )}
+              {/* Betting Section */}
+              {authenticated && !isCreator && (
+                <div>
+                  <h3 className="text-lg font-bold mb-4">Place Your Bet</h3>
+                  
+                  {!canBet && (
+                    <div className="mb-4 p-3 bg-warning/20 border border-warning/30 rounded-lg text-warning text-xs">
+                      {hasParticipated 
+                        ? 'You have already placed a bet on this duel.'
+                        : !isDuelActive
+                        ? `This duel is ${duel?.status}. Betting is not available.`
+                        : !isDeadlineValid
+                        ? 'The deadline for this duel has passed.'
+                        : 'Betting is currently unavailable.'}
+                    </div>
+                  )}
+                  
+                  {betError && (
+                    <div className="mb-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-xs">
+                      {betError}
+                    </div>
+                  )}
+                  
+                  {betSuccess && (
+                    <div className="mb-4 p-3 bg-success/20 border border-success/30 rounded-lg text-success text-xs">
+                      ✓ Bet placed successfully! Refreshing...
+                    </div>
+                  )}
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Stake Amount ({currency})</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={betAmount}
+                      onChange={(e) => setBetAmount(parseFloat(e.target.value) || 0.01)}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none text-white"
+                      disabled={isBetting || !canBet}
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setBetAmount(1)}
+                        className="flex-1 px-2 py-1 text-xs bg-white/5 hover:bg-white/10 rounded transition-colors"
+                        disabled={isBetting || !canBet}
+                      >
+                        +$1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBetAmount(20)}
+                        className="flex-1 px-2 py-1 text-xs bg-white/5 hover:bg-white/10 rounded transition-colors"
+                        disabled={isBetting || !canBet}
+                      >
+                        +$20
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBetAmount(100)}
+                        className="flex-1 px-2 py-1 text-xs bg-white/5 hover:bg-white/10 rounded transition-colors"
+                        disabled={isBetting || !canBet}
+                      >
+                        +$100
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                      onClick={handleYesBet}
+                      disabled={isBetting || !canBet}
+                    >
+                      {isBetting && selectedPrediction === 'yes' ? (
+                        <Loader2 className="animate-spin" size={24} />
+                      ) : (
+                        <>YES <span className="ml-2 text-sm opacity-80">45¢</span></>
+                      )}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                      onClick={handleNoBet}
+                      disabled={isBetting || !canBet}
+                    >
+                      {isBetting && selectedPrediction === 'no' ? (
+                        <Loader2 className="animate-spin" size={24} />
+                      ) : (
+                        <>NO <span className="ml-2 text-sm opacity-80">56¢</span></>
+                      )}
+                    </button>
+                  </div>
+                  
+                  {canBet && (
+                    <div className="mt-4 p-3 bg-white/5 rounded-lg text-xs text-white/60">
+                      <div className="flex items-center justify-between mb-1">
+                        <span>To win</span>
+                        <span className="text-success font-semibold">
+                          ${((betAmount / 0.45) - betAmount).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Avg. Price</span>
+                        <span>45¢</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
         
         {/* User's Participation */}
         {hasParticipated && userParticipation && (
