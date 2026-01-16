@@ -16,7 +16,7 @@ const nextConfig = {
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
               "connect-src 'self' http://localhost:* ws://localhost:* https://auth.privy.io https://api.privy.io https://*.privy.io wss://*.privy.io https://mainnet.rpc.privy.systems https://*.rpc.privy.systems https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://api.testnet.solana.com https://*.solana.com wss://*.solana.com https://rpc.ankr.com https://*.ankr.com https://explorer-api.walletconnect.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org",
-              "frame-src 'self' https://auth.privy.io",
+              "frame-src 'self' https://auth.privy.io https://www.tradingview.com",
               "frame-ancestors 'self' https://auth.privy.io",
             ].join('; '),
           },

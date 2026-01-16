@@ -16,11 +16,18 @@ export default function TradingViewPriceChart({
   className = '',
 }: TradingViewPriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [timeframe, setTimeframe] = useState<Timeframe>('60') // Default to 1h
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     if (!containerRef.current) return
+
+    // Clean up previous iframe if it exists
+    if (iframeRef.current && containerRef.current.contains(iframeRef.current)) {
+      containerRef.current.removeChild(iframeRef.current)
+    }
+    iframeRef.current = null
 
     // Clear container
     containerRef.current.innerHTML = ''
@@ -59,8 +66,16 @@ export default function TradingViewPriceChart({
     }
 
     containerRef.current.appendChild(iframe)
+    iframeRef.current = iframe
 
     return () => {
+      // Clean up iframe properly
+      if (iframeRef.current && containerRef.current) {
+        if (containerRef.current.contains(iframeRef.current)) {
+          containerRef.current.removeChild(iframeRef.current)
+        }
+        iframeRef.current = null
+      }
       if (containerRef.current) {
         containerRef.current.innerHTML = ''
       }
