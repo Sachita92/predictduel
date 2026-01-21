@@ -11,6 +11,7 @@ import * as anchor from '@coral-xyz/anchor'
 import { PredictDuelClient } from '../solana-program/client/sdk'
 import { createAnchorWallet } from './solana-market'
 import { getSolanaConnectionWithFallback } from './solana-rpc'
+import { sendTransactionWithRetry } from './solana-transaction-wrapper'
 
 // Program ID - deployed to devnet
 const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
@@ -78,12 +79,38 @@ export async function claimWinningsOnChain(
     // Convert market PDA string to PublicKey
     const marketPda = new PublicKey(claimData.marketPda)
     
-    // Claim winnings on-chain
-    const signature = await client.claimWinnings(marketPda)
+    // Get connection from the client's provider (accessing private field via bracket notation)
+    const connection = (client as any).provider?.connection || await getSolanaConnectionWithFallback('confirmed')
+    
+    // Claim winnings on-chain with transaction wrapper for retry logic and "already processed" handling
+    const signature = await sendTransactionWithRetry(
+      async () => {
+        return await client.claimWinnings(marketPda)
+      },
+      {
+        maxRetries: 3,
+        retryDelay: 1000,
+        connection: connection,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️ Retrying claim winnings (attempt ${attempt}/3):`, error?.message || String(error))
+        },
+      }
+    )
     
     return { signature }
   } catch (error) {
     console.error('Error claiming winnings on-chain:', error)
+    
+    // Check if transaction was already processed or winnings already claimed
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('already been processed') || 
+        errorMessage.includes('already processed') ||
+        errorMessage.includes('AlreadyClaimed') ||
+        errorMessage.includes('6008')) {
+      // Transaction succeeded or already claimed, return a placeholder signature
+      return { signature: 'already_processed' }
+    }
+    
     throw error instanceof Error 
       ? error 
       : new Error('Failed to claim winnings on-chain')

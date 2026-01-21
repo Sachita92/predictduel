@@ -46,6 +46,12 @@ export default function TradingViewPriceChart({
 
   return (
     <div className={`relative ${className}`}>
+      {/* Header - Clarify this is for price context only */}
+      <div className="mb-4">
+        <h3 className="text-sm font-medium text-white/60 mb-1">Market Price (Reference Only)</h3>
+        <p className="text-xs text-white/40">Real asset price for context. Not used for probabilities.</p>
+      </div>
+      
       {/* Timeframe Selector */}
       <div className="flex gap-2 mb-4 justify-end">
         {(['1', '5', '60', 'D'] as Timeframe[]).map((tf) => (

@@ -467,7 +467,8 @@ export class PredictDuelClient {
       throw new Error('deadline timestamp is invalid')
     }
     
-    const tx = await this.program.methods
+    // Build transaction method
+    const methodBuilder = this.program.methods
       .createMarket(
         new anchor.BN(Number(marketIndex)),
         question,
@@ -481,8 +482,11 @@ export class PredictDuelClient {
         creator: this.provider.wallet.publicKey,
         marketVault: marketVaultPda,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+      });
+
+    // Use .rpc() with error handling
+    // Note: Caller can wrap this with sendTransactionWithRetry for better error handling
+    const tx = await methodBuilder.rpc();
 
     return { signature: tx, marketPda };
   }
@@ -527,7 +531,8 @@ export class PredictDuelClient {
       this.program.programId
     );
 
-    const tx = await this.program.methods
+    // Build transaction method
+    const methodBuilder = this.program.methods
       .placeBet(prediction, new anchor.BN(stakeAmount))
       .accounts({
         market: marketPda,
@@ -535,8 +540,11 @@ export class PredictDuelClient {
         bettor: this.provider.wallet.publicKey,
         marketVault: marketVaultPda,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+      });
+
+    // Use .rpc() with error handling
+    // Note: Caller can wrap this with sendTransactionWithRetry for better error handling
+    const tx = await methodBuilder.rpc();
 
     return { signature: tx, participantPda };
   }
@@ -548,13 +556,17 @@ export class PredictDuelClient {
     marketPda: PublicKey,
     outcome: boolean
   ): Promise<string> {
-    const tx = await this.program.methods
+    // Build transaction method
+    const methodBuilder = this.program.methods
       .resolveMarket(outcome)
       .accounts({
         market: marketPda,
         resolver: this.provider.wallet.publicKey,
-      })
-      .rpc();
+      });
+
+    // Use .rpc() with error handling
+    // Note: Caller can wrap this with sendTransactionWithRetry for better error handling
+    const tx = await methodBuilder.rpc();
 
     return tx;
   }
@@ -606,7 +618,8 @@ export class PredictDuelClient {
       this.program.programId
     );
 
-    const tx = await this.program.methods
+    // Build transaction method
+    const methodBuilder = this.program.methods
       .claimWinnings()
       .accounts({
         market: marketPda,
@@ -614,8 +627,11 @@ export class PredictDuelClient {
         winner: this.provider.wallet.publicKey,
         marketVault: marketVaultPda,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+      });
+
+    // Use .rpc() with error handling
+    // Note: Caller can wrap this with sendTransactionWithRetry for better error handling
+    const tx = await methodBuilder.rpc();
 
     return tx;
   }

@@ -11,6 +11,7 @@ import * as anchor from '@coral-xyz/anchor'
 import { PredictDuelClient } from '../solana-program/client/sdk'
 import { createAnchorWallet } from './solana-market'
 import { getSolanaConnectionWithFallback } from './solana-rpc'
+import { sendTransactionWithRetry } from './solana-transaction-wrapper'
 
 // Program ID - deployed to devnet
 const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
@@ -119,12 +120,36 @@ export async function resolveMarketOnChain(
       )
     }
     
-    // Resolve market on-chain
-    const signature = await client.resolveMarket(marketPda, resolveData.outcome)
+    // Get connection from the client's provider (accessing private field via bracket notation)
+    const connection = (client as any).provider?.connection || await getSolanaConnectionWithFallback('confirmed')
+    
+    // Resolve market on-chain with transaction wrapper for retry logic and "already processed" handling
+    const signature = await sendTransactionWithRetry(
+      async () => {
+        return await client.resolveMarket(marketPda, resolveData.outcome)
+      },
+      {
+        maxRetries: 3,
+        retryDelay: 1000,
+        connection: connection,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️ Retrying market resolution (attempt ${attempt}/3):`, error?.message || String(error))
+        },
+      }
+    )
     
     return { signature }
   } catch (error) {
     console.error('Error resolving market on-chain:', error)
+    
+    // Check if transaction was already processed
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('already been processed') || 
+        errorMessage.includes('already processed')) {
+      // Transaction succeeded, return a placeholder signature
+      return { signature: 'already_processed' }
+    }
+    
     throw error instanceof Error 
       ? error 
       : new Error('Failed to resolve market on-chain')

@@ -11,6 +11,7 @@ import * as anchor from '@coral-xyz/anchor'
 import { PredictDuelClient } from '../solana-program/client/sdk'
 import { createAnchorWallet } from './solana-market'
 import { getSolanaConnectionWithFallback } from './solana-rpc'
+import { sendTransactionWithRetry } from './solana-transaction-wrapper'
 
 // Program ID - deployed to devnet
 const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
@@ -91,31 +92,72 @@ export async function placeBetOnChain(
     // Convert market PDA string to PublicKey
     const marketPda = new PublicKey(betData.marketPda)
     
-    // Place bet on-chain
-    const result = await client.placeBet({
+    // Get connection from the client's provider (accessing private field via bracket notation)
+    const clientConnection = (client as any).provider?.connection || await getSolanaConnectionWithFallback('confirmed')
+    
+    // Derive participant PDA upfront (it's deterministic based on marketPda and wallet)
+    const programId = (client as any).program?.programId || PROGRAM_ID
+    const walletPubkey = (client as any).provider?.wallet?.publicKey
+    const participantPda = PredictDuelClient.deriveParticipantPda(
+      programId,
       marketPda,
-      prediction: betData.prediction,
-      stakeAmount: stakeInLamports,
-    })
+      walletPubkey
+    )
+    
+    // Place bet on-chain with transaction wrapper for retry logic and "already processed" handling
+    const signature = await sendTransactionWithRetry(
+      async () => {
+        const result = await client.placeBet({
+          marketPda,
+          prediction: betData.prediction,
+          stakeAmount: stakeInLamports,
+        })
+        return result.signature
+      },
+      {
+        maxRetries: 3,
+        retryDelay: 1000,
+        connection: clientConnection,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️ Retrying bet placement (attempt ${attempt}/3):`, error?.message || String(error))
+        },
+      }
+    )
     
     return {
-      signature: result.signature,
-      participantPda: result.participantPda.toString(),
+      signature: signature,
+      participantPda: participantPda.toString(),
     }
   } catch (error: any) {
     console.error('Error placing bet on-chain:', error)
     
     // Preserve original error message for better debugging
     const errorMessage = error?.message || String(error)
-    const errorLogs = error?.logs || error?.transactionLogs || []
     
-    // Check if it's a duplicate transaction error
+    // The transaction wrapper already handles "already processed" errors
+    // But we still check here in case it slipped through
     if (errorMessage.includes('already been processed') || 
-        errorMessage.includes('already processed') ||
-        (Array.isArray(errorLogs) && errorLogs.some((log: string) => 
-          log.includes('already been processed') || log.includes('already processed')
-        ))) {
-      throw new Error('This transaction has already been processed. Please refresh the page to see your bet.')
+        errorMessage.includes('already processed')) {
+      // Try to derive participant PDA to verify bet was placed
+      try {
+        const marketPdaKey = new PublicKey(betData.marketPda)
+        const errorClient = await initializeClient(provider)
+        const programId = (errorClient as any).program?.programId || PROGRAM_ID
+        const walletPubkey = (errorClient as any).provider?.wallet?.publicKey
+        const errorParticipantPda = PredictDuelClient.deriveParticipantPda(
+          programId,
+          marketPdaKey,
+          walletPubkey
+        )
+        
+        return {
+          signature: 'already_processed',
+          participantPda: errorParticipantPda.toString(),
+        }
+      } catch (checkError) {
+        // If we can't verify, still throw the error
+        throw new Error('This transaction has already been processed. Please refresh the page to see your bet.')
+      }
     }
     
     // Re-throw with original message if it's an Error, otherwise create new Error

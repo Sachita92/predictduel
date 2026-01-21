@@ -95,6 +95,11 @@ export default function CreatePage() {
   
   /*This function runs when you click "Launch Duel"*/
   const handleLaunch = async () => {
+    // Prevent double-submission
+    if (isLoading) {
+      return
+    }
+    
     // Step 1: Make sure we have all the required information
     if (!category || !question || !stake) {
       setError('Please fill in all fields')

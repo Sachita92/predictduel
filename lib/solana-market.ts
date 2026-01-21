@@ -18,6 +18,8 @@ const PROGRAM_ID = new PublicKey('8aMfhVJxNZeGjgDg38XwdpMqDdrsvM42RPjF67DQ8VVe')
 
 // Import RPC utility for reliable connections
 import { getSolanaConnectionWithFallback } from './solana-rpc'
+// Import transaction wrapper for retry logic and "already processed" handling
+import { sendTransactionWithRetry } from './solana-transaction-wrapper'
 
 
 /**
@@ -387,100 +389,156 @@ export async function createMarketOnChain(
       }
     }
     
-    // Create market on-chain with retry logic for account conflicts and RPC failures
-    let lastError: any = null
-    const maxRetries = 3
-    let currentClient = client
-    let currentConnection = connection
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const { signature, marketPda } = await currentClient.createMarket({
-          marketIndex: marketIndex!,
-          question: formData.question.trim(),
-          category: mapCategory(formData.category),
-          stakeAmount: stakeInLamports,
-          deadline: deadlineDate,
-          marketType: mapType(formData.type),
-        })
-        
-        return {
-          marketPda: marketPda.toString(),
-          signature,
+    // Create market on-chain with retry logic using transaction wrapper
+    // The wrapper handles "already processed" errors and retries with fresh blockhashes
+    try {
+      // Use transaction wrapper to wrap the SDK call
+      // Get connection from the client's provider (accessing private field via bracket notation)
+      const clientConnection = (client as any).provider?.connection || connection
+      
+      const result = await sendTransactionWithRetry(
+        async () => {
+          const result = await client.createMarket({
+            marketIndex: marketIndex!,
+            question: formData.question.trim(),
+            category: mapCategory(formData.category),
+            stakeAmount: stakeInLamports,
+            deadline: deadlineDate,
+            marketType: mapType(formData.type),
+          })
+          return result.signature
+        },
+        {
+          maxRetries: 3,
+          retryDelay: 1000,
+          connection: clientConnection,
+          onRetry: (attempt, error) => {
+            console.warn(`⚠️ Retrying market creation (attempt ${attempt}/3):`, error?.message || String(error))
+          },
         }
-      } catch (error: any) {
-        lastError = error
-        
-        const errorMessage = error?.message || String(error)
-        const errorLogs = error?.transactionLogs || []
-        const logsString = Array.isArray(errorLogs) ? errorLogs.join(' ') : String(errorLogs)
-        
-        // Check if it's a network/RPC error that we can retry with a different endpoint
-        const isNetworkError = 
-          errorMessage.includes('Failed to fetch') ||
-          errorMessage.includes('failed to get recent blockhash') ||
-          errorMessage.includes('NetworkError') ||
-          errorMessage.includes('fetch failed') ||
-          errorMessage.includes('ECONNREFUSED') ||
-          errorMessage.includes('ETIMEDOUT') ||
-          errorMessage.includes('TypeError: Failed to fetch')
-        
-        // Check if it's an "account already in use" error
-        const isAccountInUse = 
-          errorMessage.includes('already in use') ||
-          errorMessage.includes('AccountAlreadyInUse') ||
-          errorMessage.includes('custom program error: 0x0') ||
-          logsString.includes('already in use')
-        
-        // If it's a network error and we have retries left, try reinitializing with fallback endpoint
-        if (isNetworkError && attempt < maxRetries - 1) {
-          console.warn(`⚠️ RPC error on attempt ${attempt + 1}/${maxRetries}:`, errorMessage)
-          console.log('🔄 Retrying with fallback RPC endpoint...')
+      )
+      
+      // Derive market PDA to return
+      const marketPda = PredictDuelClient.deriveMarketPda(
+        PROGRAM_ID,
+        creatorPubkey,
+        marketIndex!
+      )
+      
+      return {
+        marketPda: marketPda.toString(),
+        signature: result,
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error)
+      const errorLogs = error?.logs || error?.transactionLogs || []
+      const logsString = Array.isArray(errorLogs) ? errorLogs.join(' ') : String(errorLogs)
+      
+      // Check if transaction was already processed (this means it succeeded!)
+      const isAlreadyProcessed = 
+        errorMessage.includes('already been processed') ||
+        errorMessage.includes('already processed') ||
+        errorMessage.includes('This transaction has already been processed') ||
+        logsString.includes('already been processed') ||
+        logsString.includes('already processed')
+      
+      // If transaction was already processed, try to find the market
+      if (isAlreadyProcessed) {
+        console.log('✅ Transaction was already processed - checking if market was created...')
+        try {
+          const marketPda = PredictDuelClient.deriveMarketPda(
+            PROGRAM_ID,
+            creatorPubkey,
+            marketIndex!
+          )
           
-          try {
-            // Reinitialize client with fallback connection
-            currentConnection = await getSolanaConnectionWithFallback('confirmed')
-            const wallet = createAnchorWallet(provider)
-            const idl = await loadIDL()
-            currentClient = new PredictDuelClient(currentConnection, wallet, PROGRAM_ID, idl)
-            
-            // Also update the connection used for finding market index
-            connection = currentConnection
-            
-            // Wait a bit before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            continue // Retry with new client
-          } catch (reinitError) {
-            console.error('Failed to reinitialize client with fallback:', reinitError)
-            // Continue to next attempt or break
-            if (attempt < maxRetries - 1) {
-              continue
+          // Verify the market actually exists
+          const accountInfo = await connection.getAccountInfo(marketPda)
+          if (accountInfo && accountInfo.data && accountInfo.data.length > 0) {
+            // Market exists! Transaction succeeded
+            console.log('✅ Market already exists - transaction was successful')
+            return {
+              marketPda: marketPda.toString(),
+              signature: 'already_processed',
             }
           }
-        } else if (isAccountInUse && attempt < maxRetries - 1) {
-          // Try to find the next available index
-          try {
-            marketIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, currentConnection, marketIndex! + 1)
-            console.log(`Market index ${marketIndex! - 1} already in use, trying ${marketIndex}`)
-            continue // Retry with new index
-          } catch (indexError) {
-            // Can't find next index, break and throw original error
-            break
-          }
-        } else {
-          // Not a retryable error or out of retries
-          break
+        } catch (checkError) {
+          console.error('Error checking if market exists:', checkError)
         }
       }
+      
+      // Check if it's an "account already in use" error - try next index
+      const isAccountInUse = 
+        errorMessage.includes('already in use') ||
+        errorMessage.includes('AccountAlreadyInUse') ||
+        errorMessage.includes('custom program error: 0x0') ||
+        logsString.includes('already in use')
+      
+      if (isAccountInUse) {
+        // Try to find the next available index
+        try {
+          const nextIndex = await findNextMarketIndex(PROGRAM_ID, creatorPubkey, connection, marketIndex! + 1)
+          console.log(`Market index ${marketIndex!} already in use, retrying with ${nextIndex}`)
+          
+          // Recursively retry with new index (limit recursion depth)
+          return createMarketOnChain(provider, {
+            ...formData,
+            marketIndex: nextIndex,
+          })
+        } catch (indexError) {
+          // Can't find next index, throw original error
+          throw error
+        }
+      }
+      
+      // Re-throw other errors
+      throw error
     }
-    
-    // If we get here, all retries failed
-    throw lastError || new Error('Failed to create market after retries')
   } catch (error) {
     console.error('Error creating market on-chain:', error)
     
     // Provide more helpful error messages
     const errorMessage = error instanceof Error ? error.message : String(error)
+    
+    // Check if it's an "already processed" error - this means the transaction succeeded
+    if (errorMessage.includes('already been processed') || 
+        errorMessage.includes('already processed') ||
+        errorMessage.includes('This transaction has already been processed')) {
+      // Try to find the market that was created
+      try {
+        const creatorPubkey = new PublicKey(provider.publicKey.toString())
+        let connection = await getSolanaConnectionWithFallback('confirmed')
+        
+        // Try to find the market by checking recent indices
+        for (let i = 1; i <= 10; i++) {
+          try {
+            const marketPda = PredictDuelClient.deriveMarketPda(
+              PROGRAM_ID,
+              creatorPubkey,
+              i
+            )
+            const accountInfo = await connection.getAccountInfo(marketPda)
+            if (accountInfo && accountInfo.data && accountInfo.data.length > 0) {
+              // Found the market! Transaction succeeded
+              return {
+                marketPda: marketPda.toString(),
+                signature: 'already_processed',
+              }
+            }
+          } catch (e) {
+            // Continue checking
+          }
+        }
+      } catch (findError) {
+        console.error('Error finding market after already processed error:', findError)
+      }
+      
+      throw new Error(
+        'Transaction was already processed. The market may have been created successfully. ' +
+        'Please check your duels list or try creating a new one.'
+      )
+    }
+    
     if (errorMessage.includes('already in use') || errorMessage.includes('custom program error: 0x0')) {
       throw new Error(
         'Market account already exists. This usually means you\'ve already created a market with this index. ' +
