@@ -1,6 +1,6 @@
 'use client'
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface ProbabilityDataPoint {
   time: string // e.g., "10:00", "11:00", "12:00"
@@ -79,7 +79,7 @@ export default function PredictionProbabilityChart({
         style={{ height: `${height}px` }}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
+          <BarChart
             data={chartData}
             margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
           >
@@ -110,32 +110,26 @@ export default function PredictionProbabilityChart({
             <Tooltip content={<CustomTooltip />} />
             <Legend 
               wrapperStyle={{ paddingTop: '10px' }}
-              iconType="line"
+              iconType="square"
               formatter={(value) => (
                 <span style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '12px' }}>
                   {value}
                 </span>
               )}
             />
-            <Line
-              type="monotone"
+            <Bar
               dataKey="yesProbability"
               name="YES"
-              stroke="#10b981" // success color (green)
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
+              fill="#10b981" // success color (green)
+              radius={[4, 4, 0, 0]}
             />
-            <Line
-              type="monotone"
+            <Bar
               dataKey="noProbability"
               name="NO"
-              stroke="#ef4444" // danger color (red)
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
+              fill="#ef4444" // danger color (red)
+              radius={[4, 4, 0, 0]}
             />
-          </LineChart>
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>
