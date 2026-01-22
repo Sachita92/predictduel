@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') // search query for question, category, or creator
     const limit = parseInt(searchParams.get('limit') || '50')
     const skip = parseInt(searchParams.get('skip') || '0')
+    const privyId = searchParams.get('privyId') // optional: check if this user has participated
 
     // Build query
     const query: any = {
@@ -64,8 +65,15 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch duels with creator information
-    let duels = await Duel.find(query)
+    let queryBuilder = Duel.find(query)
       .populate('creator', 'username avatar walletAddress privyId')
+    
+    // If privyId is provided, also populate participants to check participation
+    if (privyId) {
+      queryBuilder = queryBuilder.populate('participants.user', 'walletAddress privyId')
+    }
+    
+    let duels = await queryBuilder
       .sort({ createdAt: -1 }) // Newest first
       .limit(limit * 2) // Fetch more if searching (we'll filter by creator username)
       .skip(skip)
@@ -86,29 +94,55 @@ export async function GET(req: NextRequest) {
       duels = duels.slice(0, limit)
     }
 
+    // Get user info if privyId is provided to check participation
+    let currentUser: any = null
+    if (privyId) {
+      currentUser = await User.findOne({ privyId }).lean()
+    }
+
     // Format the response
-    const formattedDuels = duels.map((duel: any) => ({
-      id: duel._id.toString(),
-      question: duel.question,
-      category: duel.category,
-      stake: duel.stake,
-      deadline: duel.deadline,
-      status: duel.status,
-      outcome: duel.outcome || null,
-      poolSize: duel.poolSize,
-      yesCount: duel.yesCount,
-      noCount: duel.noCount,
-      marketPda: duel.marketPda || null,
-      creator: {
-        id: duel.creator?._id?.toString() || '',
-        username: duel.creator?.username || 'Unknown',
-        avatar: duel.creator?.avatar || '',
-        walletAddress: duel.creator?.walletAddress || '',
-        privyId: (duel.creator as any)?.privyId || '',
-      },
-      participants: duel.participants?.length || 0,
-      createdAt: duel.createdAt,
-    }))
+    const formattedDuels = duels.map((duel: any) => {
+      // Check if current user has participated in this duel
+      let hasParticipated = false
+      if (currentUser && duel.participants && duel.participants.length > 0) {
+        hasParticipated = duel.participants.some((p: any) => {
+          // Check if participant's user ID matches current user's ID
+          const participantUserId = p.user?._id?.toString() || p.user?.toString()
+          if (participantUserId === currentUser._id.toString()) {
+            return true
+          }
+          // Also check by wallet address if available
+          if (currentUser.walletAddress && p.user?.walletAddress) {
+            return p.user.walletAddress.toLowerCase() === currentUser.walletAddress.toLowerCase()
+          }
+          return false
+        })
+      }
+
+      return {
+        id: duel._id.toString(),
+        question: duel.question,
+        category: duel.category,
+        stake: duel.stake,
+        deadline: duel.deadline,
+        status: duel.status,
+        outcome: duel.outcome || null,
+        poolSize: duel.poolSize,
+        yesCount: duel.yesCount,
+        noCount: duel.noCount,
+        marketPda: duel.marketPda || null,
+        creator: {
+          id: duel.creator?._id?.toString() || '',
+          username: duel.creator?.username || 'Unknown',
+          avatar: duel.creator?.avatar || '',
+          walletAddress: duel.creator?.walletAddress || '',
+          privyId: (duel.creator as any)?.privyId || '',
+        },
+        participants: duel.participants?.length || 0,
+        hasParticipated: hasParticipated, // Add flag for current user's participation
+        createdAt: duel.createdAt,
+      }
+    })
 
     return NextResponse.json(
       {

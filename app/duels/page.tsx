@@ -35,6 +35,7 @@ interface Duel {
   participants: number
   createdAt: string
   marketPda?: string | null
+  hasParticipated?: boolean // Flag indicating if current user has voted on this duel
 }
 
 const categories = ['All', 'Crypto', 'Weather', 'Sports', 'Meme', 'Local', 'Other']
@@ -63,7 +64,7 @@ export default function DuelsPage() {
 
   useEffect(() => {
     fetchDuels()
-  }, [selectedCategory, selectedStatus])
+  }, [selectedCategory, selectedStatus, user?.id]) // Refetch when user changes to update hasParticipated flags
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -92,7 +93,8 @@ export default function DuelsPage() {
     
     try {
       const categoryParam = selectedCategory === 'All' ? '' : selectedCategory
-      const url = `/api/duels?status=${selectedStatus}${categoryParam ? `&category=${categoryParam}` : ''}`
+      const privyIdParam = user?.id ? `&privyId=${user.id}` : ''
+      const url = `/api/duels?status=${selectedStatus}${categoryParam ? `&category=${categoryParam}` : ''}${privyIdParam}`
       
       const response = await fetch(url)
       const data = await response.json()
@@ -101,7 +103,16 @@ export default function DuelsPage() {
         throw new Error(data.error || 'Failed to fetch duels')
       }
 
-      setDuels(data.duels || [])
+      const fetchedDuels = data.duels || []
+      setDuels(fetchedDuels)
+      
+      // Update votedDuels state based on hasParticipated flag from API
+      const participatedDuelIds: Set<string> = new Set(
+        fetchedDuels
+          .filter((duel: Duel & { hasParticipated?: boolean }) => duel.hasParticipated)
+          .map((duel: Duel) => duel.id as string)
+      )
+      setVotedDuels(participatedDuelIds)
     } catch (err) {
       console.error('Error fetching duels:', err)
       setError(err instanceof Error ? err.message : 'Failed to load duels')
