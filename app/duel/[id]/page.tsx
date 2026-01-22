@@ -10,8 +10,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
-import PredictionProbabilityChart from '@/components/charts/PredictionProbabilityChart'
-import CurrentPriceDisplay from '@/components/charts/CurrentPriceDisplay'
+import PredictionMarketChart from '@/components/charts/PredictionMarketChart'
 import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
@@ -993,27 +992,31 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Chart Section (Middle - 2 columns on large screens) */}
           <div className="lg:col-span-2">
-            {/* Prediction Market Probabilities Chart (Main Chart) */}
-            <Card variant="glass" className="p-6 relative">
-              {/* Current Price Display (Subtle, top-right corner) */}
-              <div className="absolute top-6 right-6 hidden lg:block">
-                {(() => {
-                  // Extract symbol from question
-                  const question = duel.question.toLowerCase()
-                  let symbol: 'SOL' | 'BTC' | 'ETH' = 'SOL' // Default
-                  
-                  if (question.includes('sol') || question.includes('solana')) {
-                    symbol = 'SOL'
-                  } else if (question.includes('btc') || question.includes('bitcoin')) {
-                    symbol = 'BTC'
-                  } else if (question.includes('eth') || question.includes('ethereum')) {
-                    symbol = 'ETH'
-                  }
-                  
-                  return <CurrentPriceDisplay symbol={symbol} />
-                })()}
-              </div>
-              <PredictionProbabilityChart height={400} />
+            {/* Prediction Market Chart with TradingView + Probability Overlay */}
+            <Card variant="glass" className="p-6">
+              {(() => {
+                // Extract TradingView symbol from question
+                const question = duel.question.toLowerCase()
+                let tradingViewSymbol = 'BINANCE:SOLUSDT' // Default
+                
+                if (question.includes('sol') || question.includes('solana')) {
+                  tradingViewSymbol = 'BINANCE:SOLUSDT'
+                } else if (question.includes('btc') || question.includes('bitcoin')) {
+                  tradingViewSymbol = 'BINANCE:BTCUSDT'
+                } else if (question.includes('eth') || question.includes('ethereum')) {
+                  tradingViewSymbol = 'BINANCE:ETHUSDT'
+                }
+                
+                return (
+                  <PredictionMarketChart
+                    symbol={tradingViewSymbol}
+                    yesLiquidity={yesStake}
+                    noLiquidity={noStake}
+                    height={400}
+                    theme="dark"
+                  />
+                )
+              })()}
             </Card>
           </div>
           
