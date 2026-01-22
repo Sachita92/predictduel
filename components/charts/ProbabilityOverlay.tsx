@@ -17,9 +17,7 @@ export default function ProbabilityOverlay({
   const noPercent = total > 0 ? (noLiquidity / total) * 100 : 50
 
   return (
-    <div
-      className={`absolute top-4 left-4 right-4 z-10 pointer-events-none max-w-sm ${className}`}
-    >
+    <div className={`w-full ${className}`}>
       <div className="glass rounded-lg p-4 shadow-lg">
         {/* Header */}
         <div className="mb-3">

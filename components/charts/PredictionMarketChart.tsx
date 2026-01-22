@@ -45,9 +45,9 @@ export default function PredictionMarketChart({
   }, [theme])
 
   return (
-    <div className={`relative w-full rounded-lg overflow-hidden bg-background-darker ${className}`}>
-      {/* TradingView Chart - Base Layer */}
-      <div className="relative w-full">
+    <div className={`w-full rounded-lg overflow-hidden bg-background-darker ${className}`}>
+      {/* TradingView Chart */}
+      <div className="w-full">
         <TradingViewChart
           symbol={symbol}
           height={height}
@@ -56,11 +56,13 @@ export default function PredictionMarketChart({
         />
       </div>
 
-      {/* Probability Overlay - Top Layer */}
-      <ProbabilityOverlay
-        yesLiquidity={yesLiquidity}
-        noLiquidity={noLiquidity}
-      />
+      {/* Probability Overlay - Below Chart */}
+      <div className="mt-4">
+        <ProbabilityOverlay
+          yesLiquidity={yesLiquidity}
+          noLiquidity={noLiquidity}
+        />
+      </div>
     </div>
   )
 }
