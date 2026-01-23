@@ -992,24 +992,24 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Chart Section (Middle - 2 columns on large screens) */}
           <div className="lg:col-span-2">
-            {/* Prediction Market Chart with TradingView + Probability Overlay */}
+            {/* Prediction Market Chart with Price Chart + Probability Overlay */}
             <Card variant="glass" className="p-6">
               {(() => {
-                // Extract TradingView symbol from question
+                // Extract chart symbol from question
                 const question = duel.question.toLowerCase()
-                let tradingViewSymbol = 'BINANCE:SOLUSDT' // Default
+                let chartSymbol = 'BINANCE:SOLUSDT' // Default
                 
                 if (question.includes('sol') || question.includes('solana')) {
-                  tradingViewSymbol = 'BINANCE:SOLUSDT'
+                  chartSymbol = 'BINANCE:SOLUSDT'
                 } else if (question.includes('btc') || question.includes('bitcoin')) {
-                  tradingViewSymbol = 'BINANCE:BTCUSDT'
+                  chartSymbol = 'BINANCE:BTCUSDT'
                 } else if (question.includes('eth') || question.includes('ethereum')) {
-                  tradingViewSymbol = 'BINANCE:ETHUSDT'
+                  chartSymbol = 'BINANCE:ETHUSDT'
                 }
                 
                 return (
                   <PredictionMarketChart
-                    symbol={tradingViewSymbol}
+                    symbol={chartSymbol}
                     yesLiquidity={yesStake}
                     noLiquidity={noStake}
                     height={400}

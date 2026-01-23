@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import TradingViewChart from './TradingViewChart'
+import LightweightPriceChart from './LightweightPriceChart'
 import ProbabilityOverlay from './ProbabilityOverlay'
 
 interface PredictionMarketChartProps {
-  symbol?: string // TradingView symbol, e.g., "BINANCE:SOLUSDT"
+  symbol?: string // Chart symbol identifier, e.g., "BINANCE:SOLUSDT"
   yesLiquidity: number
   noLiquidity: number
   height?: number
@@ -46,12 +46,13 @@ export default function PredictionMarketChart({
 
   return (
     <div className={`w-full rounded-lg overflow-hidden bg-background-darker ${className}`}>
-      {/* TradingView Chart */}
+      {/* Lightweight Price Chart */}
       <div className="w-full">
-        <TradingViewChart
+        <LightweightPriceChart
           symbol={symbol}
           height={height}
           theme={currentTheme}
+          showVolume={false}
           className="w-full"
         />
       </div>
