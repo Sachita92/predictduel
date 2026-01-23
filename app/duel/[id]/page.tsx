@@ -11,6 +11,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
 import PredictionMarketChart from '@/components/charts/PredictionMarketChart'
+import ProbabilityBarChart from '@/components/charts/ProbabilityBarChart'
 import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
@@ -992,30 +993,61 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Chart Section (Middle - 2 columns on large screens) */}
           <div className="lg:col-span-2">
-            {/* Prediction Market Chart with Price Chart + Probability Overlay */}
+            {/* Conditional Chart: Price Chart for price questions, Bar Chart for non-price questions */}
             <Card variant="glass" className="p-6">
               {(() => {
-                // Extract chart symbol from question
                 const question = duel.question.toLowerCase()
-                let chartSymbol = 'BINANCE:SOLUSDT' // Default
                 
-                if (question.includes('sol') || question.includes('solana')) {
-                  chartSymbol = 'BINANCE:SOLUSDT'
-                } else if (question.includes('btc') || question.includes('bitcoin')) {
-                  chartSymbol = 'BINANCE:BTCUSDT'
-                } else if (question.includes('eth') || question.includes('ethereum')) {
-                  chartSymbol = 'BINANCE:ETHUSDT'
+                // Detect if it's a price-related question
+                const isPriceQuestion = 
+                  question.includes('price') || 
+                  question.includes('hit') || 
+                  question.includes('reach') ||
+                  question.includes('above') ||
+                  question.includes('below') ||
+                  question.includes('$') ||
+                  question.includes('sol') || question.includes('solana') ||
+                  question.includes('btc') || question.includes('bitcoin') ||
+                  question.includes('eth') || question.includes('ethereum')
+                
+                if (isPriceQuestion) {
+                  // Show price chart for price-related questions
+                  let chartSymbol = 'BINANCE:SOLUSDT' // Default
+                  
+                  if (question.includes('sol') || question.includes('solana')) {
+                    chartSymbol = 'BINANCE:SOLUSDT'
+                  } else if (question.includes('btc') || question.includes('bitcoin')) {
+                    chartSymbol = 'BINANCE:BTCUSDT'
+                  } else if (question.includes('eth') || question.includes('ethereum')) {
+                    chartSymbol = 'BINANCE:ETHUSDT'
+                  }
+                  
+                  return (
+                    <PredictionMarketChart
+                      symbol={chartSymbol}
+                      yesLiquidity={yesStake}
+                      noLiquidity={noStake}
+                      height={400}
+                      theme="dark"
+                    />
+                  )
+                } else {
+                  // Show probability bar chart for non-price questions (e.g., "Will it rain?", "Will X win?")
+                  const totalStake = yesStake + noStake
+                  const yesProbability = totalStake > 0 ? (yesStake / totalStake) * 100 : 50
+                  const noProbability = totalStake > 0 ? (noStake / totalStake) * 100 : 50
+                  
+                  return (
+                    <ProbabilityBarChart
+                      yesProbability={yesProbability}
+                      noProbability={noProbability}
+                      yesLiquidity={yesStake}
+                      noLiquidity={noStake}
+                      height={400}
+                      theme="dark"
+                    />
+                  )
                 }
-                
-                return (
-                  <PredictionMarketChart
-                    symbol={chartSymbol}
-                    yesLiquidity={yesStake}
-                    noLiquidity={noStake}
-                    height={400}
-                    theme="dark"
-                  />
-                )
               })()}
             </Card>
           </div>
