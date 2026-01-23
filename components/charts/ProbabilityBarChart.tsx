@@ -9,7 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
   LabelList,
-  Cell,
+  CartesianGrid,
 } from 'recharts'
 
 interface ProbabilityBarChartProps {
@@ -24,8 +24,8 @@ interface ProbabilityBarChartProps {
 
 interface ChartDataItem {
   name: string
-  value: number
-  fill: string
+  Yes: number
+  No: number
 }
 
 const CustomTooltip = ({ active, payload, theme }: any) => {
@@ -39,31 +39,29 @@ const CustomTooltip = ({ active, payload, theme }: any) => {
             : 'bg-white/90 border-gray-200/50 text-gray-900'
         }`}
       >
-        <p className="font-semibold">{payload[0].name}</p>
-        <p
-          className={`font-mono ${
-            isDark ? 'text-emerald-400' : 'text-emerald-600'
-          }`}
-        >
-          {payload[0].value.toFixed(2)}%
-        </p>
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="mb-1">
+            <p className="font-semibold" style={{ color: entry.color }}>
+              {entry.name}: {entry.value.toFixed(2)}%
+            </p>
+          </div>
+        ))}
       </div>
     )
   }
   return null
 }
 
-const CustomLabel = ({ x, y, width, value, theme }: any) => {
-  const isDark = theme === 'dark'
-  if (!value || width < 30) return null // Don't show label if bar is too small
+const CustomLabel = ({ x, y, width, value, fill }: any) => {
+  if (!value || width < 20) return null
 
   return (
     <text
       x={x + width / 2}
-      y={y + 15}
-      fill={isDark ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)'}
+      y={y - 5}
+      fill={fill}
       textAnchor="middle"
-      fontSize={14}
+      fontSize={13}
       fontWeight={600}
     >
       {value.toFixed(1)}%
@@ -82,25 +80,19 @@ export default function ProbabilityBarChart({
 }: ProbabilityBarChartProps) {
   const isDark = theme === 'dark'
 
-  // Theme colors
-  const yesColor = isDark ? '#10b981' : '#059669' // emerald-500 / emerald-600
-  const noColor = isDark ? '#ef4444' : '#dc2626' // red-500 / red-600
-  const backgroundColor = isDark ? '#0f172a' : '#ffffff' // slate-900 / white
+  // Theme colors - Green for Yes, Red for No
+  const yesColor = '#10b981' // emerald-500 (green)
+  const noColor = '#ef4444' // red-500 (red)
   const textColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
   const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
 
-  // Prepare data
+  // Prepare data for grouped bar chart
   const data: ChartDataItem[] = [
     {
-      name: 'Yes',
-      value: Math.max(0, Math.min(100, yesProbability)),
-      fill: yesColor,
-    },
-    {
-      name: 'No',
-      value: Math.max(0, Math.min(100, noProbability)),
-      fill: noColor,
+      name: 'Probability',
+      Yes: Math.max(0, Math.min(100, yesProbability)),
+      No: Math.max(0, Math.min(100, noProbability)),
     },
   ]
 
@@ -116,23 +108,21 @@ export default function ProbabilityBarChart({
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
           data={data}
-          layout="vertical"
-          margin={{ top: 20, right: 50, left: 20, bottom: 20 }}
+          margin={{ top: 30, right: 30, left: 20, bottom: 20 }}
         >
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
           <XAxis
-            type="number"
+            dataKey="name"
+            stroke={textColor}
+            tick={{ fill: textColor, fontSize: 14, fontWeight: 500 }}
+            axisLine={{ stroke: borderColor }}
+            tickLine={{ stroke: borderColor }}
+          />
+          <YAxis
             domain={[0, 100]}
             tickFormatter={(value) => `${value}%`}
             stroke={textColor}
             tick={{ fill: textColor, fontSize: 12 }}
-            axisLine={{ stroke: borderColor }}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={80}
-            stroke={textColor}
-            tick={{ fill: textColor, fontSize: 14, fontWeight: 500 }}
             axisLine={{ stroke: borderColor }}
             tickLine={{ stroke: borderColor }}
           />
@@ -153,17 +143,27 @@ export default function ProbabilityBarChart({
             )}
           />
           <Bar
-            dataKey="value"
-            radius={[0, 8, 8, 0]}
+            dataKey="Yes"
+            fill={yesColor}
+            radius={[8, 8, 0, 0]}
             isAnimationActive={true}
             animationDuration={800}
           >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
-            ))}
             <LabelList
-              content={<CustomLabel theme={theme} />}
-              dataKey="value"
+              content={<CustomLabel fill={yesColor} />}
+              dataKey="Yes"
+            />
+          </Bar>
+          <Bar
+            dataKey="No"
+            fill={noColor}
+            radius={[8, 8, 0, 0]}
+            isAnimationActive={true}
+            animationDuration={800}
+          >
+            <LabelList
+              content={<CustomLabel fill={noColor} />}
+              dataKey="No"
             />
           </Bar>
         </BarChart>
