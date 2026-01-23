@@ -28,19 +28,22 @@ interface ChartDataItem {
   No: number
 }
 
-const CustomTooltip = ({ active, payload, theme }: any) => {
+const CustomTooltip = ({ active, payload, theme = 'dark' }: any) => {
   if (active && payload && payload.length) {
     const isDark = theme === 'dark'
     return (
       <div
         className={`rounded-lg px-3 py-2 shadow-xl border backdrop-blur-sm ${
           isDark
-            ? 'bg-slate-800/90 border-slate-700/50 text-white'
+            ? 'bg-slate-800/95 border-slate-700/50 text-white'
             : 'bg-white/90 border-gray-200/50 text-gray-900'
         }`}
+        style={{
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : undefined,
+        }}
       >
         {payload.map((entry: any, index: number) => (
-          <div key={index} className="mb-1">
+          <div key={index} className="mb-1 last:mb-0">
             <p className="font-semibold" style={{ color: entry.color }}>
               {entry.name}: {entry.value.toFixed(2)}%
             </p>
@@ -109,6 +112,7 @@ export default function ProbabilityBarChart({
         <BarChart
           data={data}
           margin={{ top: 30, right: 30, left: 20, bottom: 20 }}
+          barCategoryGap="20%"
         >
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
           <XAxis
@@ -146,6 +150,7 @@ export default function ProbabilityBarChart({
             dataKey="Yes"
             fill={yesColor}
             radius={[8, 8, 0, 0]}
+            maxBarSize={120}
             isAnimationActive={true}
             animationDuration={800}
           >
@@ -158,6 +163,7 @@ export default function ProbabilityBarChart({
             dataKey="No"
             fill={noColor}
             radius={[8, 8, 0, 0]}
+            maxBarSize={120}
             isAnimationActive={true}
             animationDuration={800}
           >
