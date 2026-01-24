@@ -15,71 +15,67 @@ import {
 
 interface LightweightPriceChartProps {
   symbol: string // e.g., "BINANCE:SOLUSDT"
+  interval?: '1d'  
   height?: number
   theme?: 'light' | 'dark'
   showVolume?: boolean
   className?: string
 }
 
-// Mock candlestick data generator
-function generateMockCandlestickData(count: number = 30): CandlestickData[] {
-  const data: CandlestickData[] = []
-  const basePrice = 180
-  let currentPrice = basePrice
+// Fetch OHLC data from Binance API
+async function fetchBinanceOHLC(
+  symbol: string,
+  interval: string = '1d'
+): Promise<{
+  candlestickData: CandlestickData[]
+  volumeData: HistogramData[]
+}> {
+  // Strip "BINANCE:" prefix if present
+  const cleanSymbol = symbol.replace(/^BINANCE:/i, '').toUpperCase()
 
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - count)
+  const url = `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${interval}&limit=100`
 
-  for (let i = 0; i < count; i++) {
-    const date = new Date(startDate)
-    date.setDate(date.getDate() + i)
-    const dateStr = date.toISOString().split('T')[0] as Time
-
-    const volatility = 5 + Math.random() * 10
-    const trend = (Math.random() - 0.45) * 2
-    const change = trend + (Math.random() - 0.5) * volatility
-
-    const open = currentPrice
-    const close = open + change
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5
-
-    data.push({
-      time: dateStr,
-      open: Number(open.toFixed(2)),
-      high: Number(high.toFixed(2)),
-      low: Number(low.toFixed(2)),
-      close: Number(close.toFixed(2)),
-    })
-
-    currentPrice = close
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch data from Binance: ${response.statusText}`)
   }
 
-  return data
-}
+  const klines: (string | number)[][] = await response.json()
 
-// Mock volume data generator
-function generateMockVolumeData(count: number = 30): HistogramData[] {
-  const data: HistogramData[] = []
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - count)
+  const candlestickData: CandlestickData[] = []
+  const volumeData: HistogramData[] = []
 
-  for (let i = 0; i < count; i++) {
-    const date = new Date(startDate)
-    date.setDate(date.getDate() + i)
-    const dateStr = date.toISOString().split('T')[0] as Time
+  for (const kline of klines) {
+    // Binance response format: [openTime, open, high, low, close, volume, closeTime, ...]
+    const openTime = Number(kline[0])
+    const open = parseFloat(String(kline[1]))
+    const high = parseFloat(String(kline[2]))
+    const low = parseFloat(String(kline[3]))
+    const close = parseFloat(String(kline[4]))
+    const volume = parseFloat(String(kline[5]))
 
-    const volume = 1000000 + Math.random() * 5000000
-    const color = Math.random() > 0.5 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+    // Convert milliseconds to UNIX seconds (Lightweight Charts best practice)
+    const time = Math.floor(openTime / 1000) as Time
 
-    data.push({
-      time: dateStr,
-      value: Number(volume.toFixed(0)),
+    // Determine color based on price movement
+    const color = close >= open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+
+    candlestickData.push({
+      time,
+      open,
+      high,
+      low,
+      close,
+    })
+
+    volumeData.push({
+      time,
+      value: volume,
       color,
     })
   }
 
-  return data
+  return { candlestickData, volumeData }
 }
 
 export default function LightweightPriceChart({
@@ -159,26 +155,27 @@ export default function LightweightPriceChart({
       const volumeSeries = chart.addSeries(HistogramSeries, {
         color: '#26a69a',
         priceFormat: { type: 'volume' },
-        priceScaleId: 'right', // or create custom scale if needed
+        priceScaleId: '', // Separate hidden scale for volume (cleaner visuals)
       })
 
       volumeSeriesRef.current = volumeSeries
-
-      // Position volume at bottom
-      chart.priceScale('right').applyOptions({
-        scaleMargins: { top: 0.75, bottom: 0 }, // adjust as needed
-        borderVisible: false,
-      })
     }
 
-    // Load mock data (replace with real fetch later)
-    const candlestickData = generateMockCandlestickData(60) // more bars for better look
-    candlestickSeries.setData(candlestickData)
+    // Fetch and load real data from Binance
+    const loadData = async () => {
+      try {
+        const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol)
+        candlestickSeries.setData(candlestickData)
 
-    if (showVolume && volumeSeriesRef.current) {
-      const volumeData = generateMockVolumeData(60)
-      volumeSeriesRef.current.setData(volumeData)
+        if (showVolume && volumeSeriesRef.current) {
+          volumeSeriesRef.current.setData(volumeData)
+        }
+      } catch (error) {
+        console.error('Error fetching Binance data:', error)
+      }
     }
+
+    loadData()
 
     // Crosshair tooltip
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
