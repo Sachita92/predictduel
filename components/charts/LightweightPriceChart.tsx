@@ -89,6 +89,7 @@ export default function LightweightPriceChart({
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram', Time> | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [tooltipData, setTooltipData] = useState<{
     price: string
     time: string
@@ -96,6 +97,8 @@ export default function LightweightPriceChart({
     x: number
     y: number
   } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const isDark = theme === 'dark'
   const backgroundColor = isDark ? '#0f172a' : '#ffffff'
@@ -108,7 +111,22 @@ export default function LightweightPriceChart({
   useEffect(() => {
     if (!chartContainerRef.current) return
 
-    const chart = createChart(chartContainerRef.current, {
+    // Wait for container to have width before creating chart
+    const initChart = () => {
+      if (!chartContainerRef.current) return
+
+      // Ensure container has width
+      const containerWidth = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800
+      if (containerWidth === 0) {
+        // Retry if container doesn't have width yet
+        requestAnimationFrame(initChart)
+        return
+      }
+
+      setError(null)
+      setIsLoading(true)
+
+      const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: backgroundColor },
         textColor,
@@ -126,7 +144,7 @@ export default function LightweightPriceChart({
         timeVisible: true,
         secondsVisible: false,
       },
-      width: chartContainerRef.current.clientWidth,
+      width: containerWidth,
       height,
       crosshair: {
         mode: 1, // Normal
@@ -164,14 +182,26 @@ export default function LightweightPriceChart({
     // Fetch and load real data from Binance
     const loadData = async () => {
       try {
+        setIsLoading(true)
+        setError(null)
         const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol)
+        
+        if (candlestickData.length === 0) {
+          throw new Error('No data received from Binance')
+        }
+
         candlestickSeries.setData(candlestickData)
 
         if (showVolume && volumeSeriesRef.current) {
           volumeSeriesRef.current.setData(volumeData)
         }
+        
+        setIsLoading(false)
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load chart data'
         console.error('Error fetching Binance data:', error)
+        setError(errorMessage)
+        setIsLoading(false)
       }
     }
 
@@ -214,25 +244,51 @@ export default function LightweightPriceChart({
       })
     })
 
-    // Resize handling
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
+      // Resize handling
+      const handleResize = () => {
+        if (chartContainerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
+        }
+      }
+
+      resizeObserverRef.current = new ResizeObserver(handleResize)
+      resizeObserverRef.current.observe(chartContainerRef.current)
+    }
+
+    // Initialize chart
+    initChart()
+
+    // Cleanup function for useEffect
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect()
+        resizeObserverRef.current = null
+      }
+      if (chartRef.current) {
+        chartRef.current.remove()
+        chartRef.current = null
       }
     }
-
-    const resizeObserver = new ResizeObserver(handleResize)
-    resizeObserver.observe(chartContainerRef.current)
-
-    return () => {
-      resizeObserver.disconnect()
-      chart.remove()
-    }
-  }, [symbol, height, theme, showVolume]) // removed redundant deps
+  }, [symbol, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
 
   return (
     <div className={`relative w-full ${className}`}>
-      <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" />
+      <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" style={{ minHeight: height }} />
+
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background-darker/80 rounded-lg">
+          <div className="text-slate-400 text-sm">Loading chart data...</div>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background-darker/80 rounded-lg">
+          <div className="text-red-400 text-sm text-center px-4">
+            <div className="font-semibold mb-1">Error loading chart</div>
+            <div className="text-xs">{error}</div>
+          </div>
+        </div>
+      )}
 
       {tooltipData && tooltipData.visible && (
         <div
