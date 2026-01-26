@@ -111,8 +111,21 @@ async function fetchBinanceOHLC(
   candlestickData: CandlestickData[]
   volumeData: HistogramData[]
 }> {
+  // Validate inputs
+  if (!symbol || typeof symbol !== 'string' || symbol.trim().length === 0) {
+    throw new Error(`Invalid symbol: ${symbol}. Symbol must be a non-empty string.`)
+  }
+
+  if (!interval || typeof interval !== 'string') {
+    throw new Error(`Invalid interval: ${interval}. Interval must be a non-empty string.`)
+  }
+
   // Strip "BINANCE:" prefix if present
-  const cleanSymbol = symbol.replace(/^BINANCE:/i, '').toUpperCase()
+  const cleanSymbol = symbol.replace(/^BINANCE:/i, '').toUpperCase().trim()
+  
+  if (!cleanSymbol || cleanSymbol.length === 0) {
+    throw new Error(`Invalid symbol after processing: ${symbol}`)
+  }
 
   const startTime = getTimeRangeMs(timeRange)
   const endTime = Date.now()
@@ -124,7 +137,7 @@ async function fetchBinanceOHLC(
   const maxLimit = 1000
 
   while (currentStartTime < endTime) {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${interval}&startTime=${currentStartTime}&endTime=${endTime}&limit=${maxLimit}`
+    const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(cleanSymbol)}&interval=${encodeURIComponent(interval)}&startTime=${currentStartTime}&endTime=${endTime}&limit=${maxLimit}`
 
     const response = await fetch(url)
     if (!response.ok) {
@@ -155,10 +168,14 @@ async function fetchBinanceOHLC(
     
     // Update startTime to the last candle's close time + 1ms
     const lastCandle = klines[klines.length - 1]
-    if (!lastCandle || lastCandle.length < 7) {
+    if (!lastCandle || !Array.isArray(lastCandle) || lastCandle.length < 7) {
       break // Invalid candle data, stop fetching
     }
-    currentStartTime = (lastCandle[6] as number) + 1 // closeTime is at index 6
+    const closeTime = lastCandle[6]
+    if (closeTime === undefined || closeTime === null || typeof closeTime !== 'number') {
+      break // Invalid closeTime, stop fetching
+    }
+    currentStartTime = Number(closeTime) + 1 // closeTime is at index 6
   }
 
   const klines = allKlines
@@ -178,6 +195,7 @@ async function fetchBinanceOHLC(
     }
 
     // Binance response format: [openTime, open, high, low, close, volume, closeTime, ...]
+    // Safely access array indices
     const openTime = kline[0]
     const open = kline[1]
     const high = kline[2]
@@ -185,10 +203,14 @@ async function fetchBinanceOHLC(
     const close = kline[4]
     const volume = kline[5]
 
-    // Validate all required values exist
-    if (openTime === undefined || open === undefined || high === undefined || 
-        low === undefined || close === undefined || volume === undefined) {
-      console.warn('Missing data in kline:', kline)
+    // Validate all required values exist and are not null/undefined
+    if (openTime === undefined || openTime === null ||
+        open === undefined || open === null ||
+        high === undefined || high === null ||
+        low === undefined || low === null ||
+        close === undefined || close === null ||
+        volume === undefined || volume === null) {
+      console.warn('Missing or null data in kline:', { kline, openTime, open, high, low, close, volume })
       continue // Skip invalid data
     }
 
@@ -340,6 +362,13 @@ export default function LightweightPriceChart({
   const downColor = '#ef4444'
 
   useEffect(() => {
+    // Don't initialize if symbol is missing
+    if (!symbol || typeof symbol !== 'string' || symbol.trim().length === 0) {
+      setError('Symbol is required to load chart data')
+      setIsLoading(false)
+      return
+    }
+
     if (!chartContainerRef.current) return
 
     // Wait for container to have width before creating chart
@@ -536,6 +565,11 @@ export default function LightweightPriceChart({
     // Fetch and load real data from Binance
     const loadData = async () => {
       try {
+        // Validate symbol before fetching
+        if (!symbol || typeof symbol !== 'string' || symbol.trim().length === 0) {
+          throw new Error('Invalid symbol: Symbol is required and must be a non-empty string')
+        }
+
         setIsLoading(true)
         setError(null)
         const binanceInterval = mapIntervalToBinance(interval)
@@ -625,7 +659,12 @@ export default function LightweightPriceChart({
       }
 
       // Get data from main series (works with all chart types)
-      const data = param.seriesData.get(mainSeriesRef.current || candlestickSeries) as CandlestickData | LineData | AreaData | BaselineData | HistogramData | undefined
+      const series = mainSeriesRef.current || candlestickSeriesRef.current
+      if (!series) {
+        setTooltipData(null)
+        return
+      }
+      const data = param.seriesData.get(series) as CandlestickData | LineData | AreaData | BaselineData | HistogramData | undefined
       if (!data) {
         setTooltipData(null)
         return
@@ -639,15 +678,21 @@ export default function LightweightPriceChart({
       }
 
       // Extract price value based on data type
-      let price: number
+      let price: number | undefined
       if ('close' in data) {
-        price = data.close
+        price = (data as CandlestickData).close
       } else if ('value' in data) {
-        price = data.value
+        price = (data as LineData | AreaData | BaselineData | HistogramData).value
       } else {
         setTooltipData(null)
         return
       }
+      
+      if (price === undefined || price === null || isNaN(price)) {
+        setTooltipData(null)
+        return
+      }
+      
       const priceStr = price.toFixed(2)
       setTooltipData({
         price: `$${priceStr}`,
@@ -741,7 +786,8 @@ export default function LightweightPriceChart({
           if (blob) {
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
-            link.download = `${cleanSymbol}-${interval}-${new Date().toISOString()}.png`
+            const symbolName = symbol ? symbol.replace(/^BINANCE:/i, '').toUpperCase() : 'CHART'
+            link.download = `${symbolName}-${interval}-${new Date().toISOString()}.png`
             link.href = url
             link.click()
             URL.revokeObjectURL(url)
