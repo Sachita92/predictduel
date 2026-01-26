@@ -15,8 +15,9 @@ import {
   MouseEventParams,
 } from 'lightweight-charts'
 
-type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w' | '1M'
-type Indicator = 'RSI' | 'MACD' | 'none'
+type Interval = '1s' | '15s' | '30s' | '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '8h' | '12h' | '1d' | '1w' | '1M'
+type TimeRange = '5y' | '1y' | '6m' | '3m' | '1m' | '5d' | '1d'
+type Indicator = 'RSI' | 'MACD' | 'none' | string
 
 interface LightweightPriceChartProps {
   symbol: string // e.g., "BINANCE:SOLUSDT"
@@ -73,10 +74,34 @@ function calculateRSI(prices: number[], period: number = 14): number[] {
   return rsi
 }
 
-// Fetch OHLC data from Binance API
+// Calculate milliseconds for time range
+function getTimeRangeMs(timeRange: TimeRange): number {
+  const now = Date.now()
+  switch (timeRange) {
+    case '5y':
+      return now - 5 * 365 * 24 * 60 * 60 * 1000
+    case '1y':
+      return now - 365 * 24 * 60 * 60 * 1000
+    case '6m':
+      return now - 6 * 30 * 24 * 60 * 60 * 1000
+    case '3m':
+      return now - 3 * 30 * 24 * 60 * 60 * 1000
+    case '1m':
+      return now - 30 * 24 * 60 * 60 * 1000
+    case '5d':
+      return now - 5 * 24 * 60 * 60 * 1000
+    case '1d':
+      return now - 24 * 60 * 60 * 1000
+    default:
+      return now - 365 * 24 * 60 * 60 * 1000 // Default to 1 year
+  }
+}
+
+// Fetch OHLC data from Binance API with time range support
 async function fetchBinanceOHLC(
   symbol: string,
-  interval: string = '1d'
+  interval: string = '1d',
+  timeRange: TimeRange = '1y'
 ): Promise<{
   candlestickData: CandlestickData[]
   volumeData: HistogramData[]
@@ -84,14 +109,38 @@ async function fetchBinanceOHLC(
   // Strip "BINANCE:" prefix if present
   const cleanSymbol = symbol.replace(/^BINANCE:/i, '').toUpperCase()
 
-  const url = `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${interval}&limit=100`
+  const startTime = getTimeRangeMs(timeRange)
+  const endTime = Date.now()
+  
+  // Binance API limit is 1000 candles per request
+  // We'll fetch in batches if needed
+  const allKlines: (string | number)[][] = []
+  let currentStartTime = startTime
+  const maxLimit = 1000
 
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch data from Binance: ${response.statusText}`)
+  while (currentStartTime < endTime) {
+    const url = `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${interval}&startTime=${currentStartTime}&endTime=${endTime}&limit=${maxLimit}`
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch data from Binance: ${response.statusText}`)
+    }
+
+    const klines: (string | number)[][] = await response.json()
+    
+    if (klines.length === 0) break
+    
+    allKlines.push(...klines)
+    
+    // If we got less than maxLimit, we've reached the end
+    if (klines.length < maxLimit) break
+    
+    // Update startTime to the last candle's close time + 1ms
+    const lastCandle = klines[klines.length - 1]
+    currentStartTime = (lastCandle[6] as number) + 1 // closeTime is at index 6
   }
 
-  const klines: (string | number)[][] = await response.json()
+  const klines = allKlines
 
   const candlestickData: CandlestickData[] = []
   const volumeData: HistogramData[] = []
@@ -144,9 +193,12 @@ export default function LightweightPriceChart({
   const rsiSeriesRef = useRef<ISeriesApi<'Line', Time> | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [interval, setInterval] = useState<Interval>(initialInterval)
-  const [indicator, setIndicator] = useState<Indicator>('RSI')
+  const [timeRange, setTimeRange] = useState<TimeRange>('1y')
+  const [indicator, setIndicator] = useState<Indicator>('none')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showDisplayOptions, setShowDisplayOptions] = useState(false)
+  const [showIntervalDropdown, setShowIntervalDropdown] = useState(false)
+  const [indicatorSearch, setIndicatorSearch] = useState('')
   const [tooltipData, setTooltipData] = useState<{
     price: string
     time: string
@@ -241,7 +293,8 @@ export default function LightweightPriceChart({
       try {
         setIsLoading(true)
         setError(null)
-        const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol, interval)
+        const binanceInterval = mapIntervalToBinance(interval)
+        const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol, binanceInterval, timeRange)
         
         if (candlestickData.length === 0) {
           throw new Error('No data received from Binance')
@@ -253,7 +306,7 @@ export default function LightweightPriceChart({
           volumeSeriesRef.current.setData(volumeData)
         }
 
-        // Calculate and add RSI if indicator is enabled
+        // Calculate and add RSI if indicator is selected
         if (indicator === 'RSI' && candlestickData.length > 14) {
           const closes = candlestickData.map(d => d.close)
           const rsiValues = calculateRSI(closes, 14)
@@ -373,7 +426,7 @@ export default function LightweightPriceChart({
         chartRef.current = null
       }
     }
-  }, [symbol, interval, indicator, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
+  }, [symbol, interval, timeRange, indicator, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
 
   // Fullscreen functionality
   const toggleFullscreen = () => {
@@ -399,17 +452,21 @@ export default function LightweightPriceChart({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showDisplayOptions && !(event.target as Element).closest('.relative')) {
+      const target = event.target as Element
+      if (showDisplayOptions && !target.closest('[data-dropdown="indicators"]')) {
         setShowDisplayOptions(false)
+      }
+      if (showIntervalDropdown && !target.closest('[data-dropdown="intervals"]')) {
+        setShowIntervalDropdown(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showDisplayOptions])
+  }, [showDisplayOptions, showIntervalDropdown])
 
   // Screenshot functionality - uses browser's print/screenshot capabilities
   const takeScreenshot = () => {
@@ -434,113 +491,273 @@ export default function LightweightPriceChart({
     }
   }
 
-  const intervals: Interval[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M']
+  // Map interval to Binance API format (Binance doesn't support seconds, so map to 1m)
+  const mapIntervalToBinance = (int: Interval): string => {
+    if (int === '1s' || int === '15s' || int === '30s') return '1m' // Map seconds to 1m
+    return int
+  }
+
+  // Favorite intervals to show as buttons
+  const favoriteIntervals: Interval[] = ['1m', '30m', '1h']
+  
+  // All intervals organized by category
+  const intervalCategories = {
+    Seconds: ['1s', '15s', '30s'] as Interval[],
+    Minutes: ['1m', '3m', '5m', '15m', '30m'] as Interval[],
+    Hours: ['1h', '2h', '4h', '8h', '12h'] as Interval[],
+    Days: ['1d', '1w', '1M'] as Interval[],
+  }
+  
+  // Favorites with star indicator
+  const favoriteSet = new Set(['1m', '30m', '1h'] as Interval[])
+  
+  // Available indicators list
+  const availableIndicators = [
+    '52 Week High/Low',
+    'Accelerator Oscillator',
+    'Accumulation/Distribution',
+    'Accumulative Swing Index',
+    'Advance/Decline',
+    'Alligator',
+    'Average Directional Index',
+    'Average True Range',
+    'Awesome Oscillator',
+    'Bollinger Bands',
+    'Chaikin Money Flow',
+    'Chaikin Oscillator',
+    'Commodity Channel Index',
+    'Detrended Price Oscillator',
+    'Directional Movement Index',
+    'Ease of Movement',
+    'Elder Force Index',
+    'Envelope',
+    'Fibonacci Retracement',
+    'Ichimoku Cloud',
+    'Keltner Channel',
+    'MACD',
+    'Mass Index',
+    'Money Flow Index',
+    'Moving Average',
+    'On Balance Volume',
+    'Parabolic SAR',
+    'Price Channel',
+    'Price Oscillator',
+    'Pivot Points',
+    'Rate of Change',
+    'Relative Strength Index',
+    'Stochastic',
+    'Triple Exponential Moving Average',
+    'Volume Oscillator',
+    'Volume Profile',
+    'Williams %R',
+  ]
+  
+  // Filter indicators based on search
+  const filteredIndicators = availableIndicators.filter(ind =>
+    ind.toLowerCase().includes(indicatorSearch.toLowerCase())
+  )
+  
   const cleanSymbol = symbol.replace(/^BINANCE:/i, '').toUpperCase()
 
   return (
     <div className={`relative w-full ${className} ${isFullscreen ? 'fixed inset-0 z-50 bg-background-dark' : ''}`}>
-      {/* Chart Controls Header */}
-      <div className="flex items-center justify-between mb-2 px-2 py-1 bg-background-darker/50 rounded-t-lg border-b border-white/10">
-        {/* Left: Timeframe Selector */}
-        <div className="flex items-center gap-1">
-          {intervals.map((int) => (
+      {/* Chart Controls Header - Jupiter Style */}
+      <div className="flex items-center justify-between px-3 py-2 bg-transparent border-b border-white/5">
+        {/* Left: Timeframe Selector - Compact with Dropdown */}
+        <div className="flex items-center gap-0.5" data-dropdown="intervals">
+          {/* Favorite intervals as buttons */}
+          {favoriteIntervals.map((int) => (
             <button
               key={int}
               onClick={() => setInterval(int)}
-              className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 ${
                 interval === int
-                  ? 'bg-emerald-500 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10'
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
               }`}
             >
               {int}
             </button>
           ))}
+          
+          {/* Dropdown button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowIntervalDropdown(!showIntervalDropdown)}
+              className={`px-2 py-1 text-xs rounded-md transition-all duration-150 ${
+                showIntervalDropdown
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {/* Interval Dropdown Menu */}
+            {showIntervalDropdown && (
+              <div className="absolute left-0 top-full mt-1.5 bg-[#1a1d29] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[200px] overflow-hidden">
+                <div className="py-2">
+                  {/* Seconds */}
+                  <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase">Seconds</div>
+                  <div className="px-2 pb-2">
+                    {intervalCategories.Seconds.map((int) => (
+                      <button
+                        key={int}
+                        onClick={() => {
+                          setInterval(int)
+                          setShowIntervalDropdown(false)
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs rounded-md transition-all ${
+                          interval === int
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {int}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Minutes */}
+                  <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase">Minutes</div>
+                  <div className="px-2 pb-2">
+                    {intervalCategories.Minutes.map((int) => (
+                      <button
+                        key={int}
+                        onClick={() => {
+                          setInterval(int)
+                          setShowIntervalDropdown(false)
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs rounded-md transition-all flex items-center gap-1 ${
+                          interval === int
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {int}
+                        {favoriteSet.has(int) && (
+                          <span className="text-yellow-400 text-[10px]">★</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Hours */}
+                  <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase">Hours</div>
+                  <div className="px-2 pb-2">
+                    {intervalCategories.Hours.map((int) => (
+                      <button
+                        key={int}
+                        onClick={() => {
+                          setInterval(int)
+                          setShowIntervalDropdown(false)
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs rounded-md transition-all flex items-center gap-1 ${
+                          interval === int
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {int}
+                        {favoriteSet.has(int) && (
+                          <span className="text-yellow-400 text-[10px]">★</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Days */}
+                  <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase">Days</div>
+                  <div className="px-2 pb-2">
+                    {intervalCategories.Days.map((int) => (
+                      <button
+                        key={int}
+                        onClick={() => {
+                          setInterval(int)
+                          setShowIntervalDropdown(false)
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs rounded-md transition-all ${
+                          interval === int
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {int}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Indicators Button - Right after interval selector */}
+          <div className="relative" data-dropdown="indicators">
+            <button
+              onClick={() => setShowDisplayOptions(!showDisplayOptions)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-all duration-150 ${
+                showDisplayOptions
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              f Indicators
+            </button>
+          </div>
         </div>
 
-        {/* Center: Symbol Info */}
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-300 font-medium">{cleanSymbol}</span>
-          <span className="text-slate-500">·</span>
-          <span className="text-slate-400">{interval}</span>
+        {/* Center: Symbol Info - Jupiter Style */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-slate-400 font-medium">{cleanSymbol}</span>
+          <span className="text-slate-600">·</span>
+          <span className="text-slate-500">{interval}</span>
           {indicator !== 'none' && (
             <>
-              <span className="text-slate-500">·</span>
-              <span className="text-purple-400">{indicator}</span>
+              <span className="text-slate-600">·</span>
+              <span className="text-slate-400">
+                {indicator === 'RSI' ? 'RSI' : indicator}
+              </span>
             </>
           )}
         </div>
 
-        {/* Right: Controls */}
-        <div className="flex items-center gap-2">
-          {/* Indicators Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDisplayOptions(!showDisplayOptions)}
-              className="px-3 py-1 text-xs text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all"
-            >
-              f Indicators
-            </button>
-            {showDisplayOptions && (
-              <div className="absolute right-0 top-full mt-1 bg-background-darker border border-white/20 rounded-lg shadow-xl z-20 min-w-[120px]">
-                <button
-                  onClick={() => {
-                    setIndicator('RSI')
-                    setShowDisplayOptions(false)
-                  }}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-all ${
-                    indicator === 'RSI' ? 'text-purple-400' : 'text-slate-300'
-                  }`}
-                >
-                  RSI
-                </button>
-                <button
-                  onClick={() => {
-                    setIndicator('none')
-                    setShowDisplayOptions(false)
-                  }}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-all ${
-                    indicator === 'none' ? 'text-purple-400' : 'text-slate-300'
-                  }`}
-                >
-                  None
-                </button>
-              </div>
-            )}
-          </div>
+        {/* Right: Controls - Jupiter Style */}
+        <div className="flex items-center gap-1">
 
-          {/* Settings Icon */}
-          <button className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Settings Icon - Jupiter Style */}
+          <button className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-md transition-all duration-150">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
 
-          {/* Screenshot Icon */}
+          {/* Screenshot Icon - Jupiter Style */}
           <button
             onClick={takeScreenshot}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all"
+            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-md transition-all duration-150"
             title="Take Screenshot"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
 
-          {/* Fullscreen Icon */}
+          {/* Fullscreen Icon - Jupiter Style */}
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all"
+            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-md transition-all duration-150"
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
           >
             {isFullscreen ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
               </svg>
             )}
@@ -548,7 +765,110 @@ export default function LightweightPriceChart({
         </div>
       </div>
 
-      <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" style={{ minHeight: height }} />
+      <div ref={chartContainerRef} className="w-full overflow-hidden bg-transparent" style={{ minHeight: height }} />
+
+      {/* Indicators Modal */}
+      {showDisplayOptions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowDisplayOptions(false)}>
+          <div
+            className="bg-[#1a1d29] border border-white/10 rounded-lg shadow-2xl w-[400px] max-h-[600px] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            data-dropdown="indicators"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <h2 className="text-lg font-bold text-white">Indicators</h2>
+              <button
+                onClick={() => setShowDisplayOptions(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="px-4 py-3 border-b border-white/10">
+              <div className="relative">
+                <svg
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={indicatorSearch}
+                  onChange={(e) => setIndicatorSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-white/20 text-sm"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Indicators List */}
+            <div className="flex-1 overflow-y-auto px-2 py-2">
+              {filteredIndicators.length === 0 ? (
+                <div className="px-4 py-8 text-center text-slate-500 text-sm">No indicators found</div>
+              ) : (
+                filteredIndicators.map((indName) => {
+                  const isRSI = indName === 'Relative Strength Index'
+                  const isMACD = indName === 'MACD'
+                  const indicatorKey = isRSI ? 'RSI' : isMACD ? 'MACD' : indName
+                  const isSelected = indicator === indicatorKey
+                  
+                  return (
+                    <button
+                      key={indName}
+                      onClick={() => {
+                        if (isRSI) {
+                          setIndicator('RSI')
+                        } else if (isMACD) {
+                          setIndicator('MACD')
+                        } else {
+                          // For now, only RSI and MACD are implemented
+                          // Other indicators can be added later
+                          setIndicator('none')
+                        }
+                        setShowDisplayOptions(false)
+                        setIndicatorSearch('')
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm rounded-md transition-all ${
+                        isSelected
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {indName}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Range Selector - Jupiter Style (Bottom) */}
+      <div className="flex items-center justify-center gap-1 px-3 py-2 border-t border-white/5">
+        {(['5y', '1y', '6m', '3m', '1m', '5d', '1d'] as TimeRange[]).map((range) => (
+          <button
+            key={range}
+            onClick={() => setTimeRange(range)}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 ${
+              timeRange === range
+                ? 'bg-white/10 text-white'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            {range}
+          </button>
+        ))}
+      </div>
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background-darker/80 rounded-lg">
