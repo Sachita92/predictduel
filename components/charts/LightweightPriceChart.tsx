@@ -418,13 +418,29 @@ export default function LightweightPriceChart({
     // Function to create/update main series based on chart type
     const createMainSeries = (type: ChartType, data: CandlestickData[]) => {
       // Remove existing main series if any
-      if (mainSeriesRef.current) {
-        chart.removeSeries(mainSeriesRef.current)
+      try {
+        if (mainSeriesRef.current && chart) {
+          chart.removeSeries(mainSeriesRef.current)
+          mainSeriesRef.current = null
+        }
+      } catch (error) {
+        console.warn('Error removing main series:', error)
         mainSeriesRef.current = null
       }
-      if (candlestickSeriesRef.current) {
-        chart.removeSeries(candlestickSeriesRef.current)
+      
+      try {
+        if (candlestickSeriesRef.current && chart) {
+          chart.removeSeries(candlestickSeriesRef.current)
+          candlestickSeriesRef.current = null
+        }
+      } catch (error) {
+        console.warn('Error removing candlestick series:', error)
         candlestickSeriesRef.current = null
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No data provided to createMainSeries')
+        return null
       }
 
       let series: ISeriesApi<any, Time> | null = null
@@ -441,7 +457,9 @@ export default function LightweightPriceChart({
             borderDownColor: downColor,
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
-          series.setData(data)
+          if (series && data.length > 0) {
+            series.setData(data)
+          }
           break
 
         case 'Hollow Candles':
@@ -456,7 +474,9 @@ export default function LightweightPriceChart({
             borderDownColor: downColor,
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
-          series.setData(data)
+          if (series && data.length > 0) {
+            series.setData(data)
+          }
           break
 
         case 'Heikin Ashi':
@@ -471,7 +491,9 @@ export default function LightweightPriceChart({
             borderDownColor: downColor,
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
-          series.setData(haData)
+          if (series && haData.length > 0) {
+            series.setData(haData)
+          }
           break
 
         case 'Line':
@@ -486,7 +508,10 @@ export default function LightweightPriceChart({
             lineStyle: type === 'Step line' ? 2 : 0, // Step line style
             pointMarkersVisible: type === 'Line with markers',
           })
-          series.setData(convertToLineData(data))
+          const lineData = convertToLineData(data)
+          if (series && lineData.length > 0) {
+            series.setData(lineData)
+          }
           break
 
         case 'Area':
@@ -497,7 +522,10 @@ export default function LightweightPriceChart({
             bottomColor: upColor + '00',
             lineWidth: 2,
           })
-          series.setData(convertToAreaData(data))
+          const areaData = convertToAreaData(data)
+          if (series && areaData.length > 0) {
+            series.setData(areaData)
+          }
           break
 
         case 'Baseline':
@@ -511,7 +539,10 @@ export default function LightweightPriceChart({
             bottomFillColor2: downColor + '00',
             lineWidth: 2,
           })
-          series.setData(convertToBaselineData(data))
+          const baselineData = convertToBaselineData(data)
+          if (series && baselineData.length > 0) {
+            series.setData(baselineData)
+          }
           break
 
         case 'Bars':
@@ -520,7 +551,10 @@ export default function LightweightPriceChart({
             color: upColor,
             priceFormat: { type: 'price' },
           })
-          series.setData(convertToBarData(data))
+          const barData = convertToBarData(data)
+          if (series && barData.length > 0) {
+            series.setData(barData)
+          }
           break
 
         case 'High-low':
@@ -529,7 +563,10 @@ export default function LightweightPriceChart({
             lineWidth: 1,
             priceLineVisible: false,
           })
-          series.setData(convertToHighLowData(data))
+          const highLowData = convertToHighLowData(data)
+          if (series && highLowData.length > 0) {
+            series.setData(highLowData)
+          }
           break
       }
 
@@ -580,9 +617,13 @@ export default function LightweightPriceChart({
         }
 
         // Update main series based on chart type
+        if (!chart || !chartRef.current) {
+          throw new Error('Chart not initialized. Cannot set data.')
+        }
+        
         createMainSeries(chartType, candlestickData)
 
-        if (showVolume && volumeSeriesRef.current) {
+        if (showVolume && volumeSeriesRef.current && volumeData && volumeData.length > 0) {
           volumeSeriesRef.current.setData(volumeData)
         }
 
@@ -625,11 +666,19 @@ export default function LightweightPriceChart({
               })
             }
             
-            rsiSeriesRef.current.setData(rsiData)
+            if (rsiSeriesRef.current && rsiData && rsiData.length > 0) {
+              rsiSeriesRef.current.setData(rsiData)
+            }
           }
         } else if (rsiSeriesRef.current && indicator !== 'RSI') {
           // Remove RSI series if indicator is disabled
-          chart.removeSeries(rsiSeriesRef.current)
+          try {
+            if (chart && rsiSeriesRef.current) {
+              chart.removeSeries(rsiSeriesRef.current)
+            }
+          } catch (error) {
+            console.warn('Error removing RSI series:', error)
+          }
           rsiSeriesRef.current = null
         }
         
