@@ -128,10 +128,23 @@ async function fetchBinanceOHLC(
 
     const response = await fetch(url)
     if (!response.ok) {
-      throw new Error(`Failed to fetch data from Binance: ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`Failed to fetch data from Binance: ${response.statusText} - ${errorText}`)
     }
 
-    const klines: (string | number)[][] = await response.json()
+    const responseData = await response.json()
+    
+    // Check if response is an error object
+    if (responseData && typeof responseData === 'object' && 'code' in responseData && 'msg' in responseData) {
+      throw new Error(`Binance API error: ${responseData.msg} (code: ${responseData.code})`)
+    }
+    
+    // Ensure response is an array
+    if (!Array.isArray(responseData)) {
+      throw new Error(`Invalid response format from Binance API: expected array, got ${typeof responseData}`)
+    }
+    
+    const klines: (string | number)[][] = responseData
     
     if (klines.length === 0) break
     
@@ -142,40 +155,74 @@ async function fetchBinanceOHLC(
     
     // Update startTime to the last candle's close time + 1ms
     const lastCandle = klines[klines.length - 1]
+    if (!lastCandle || lastCandle.length < 7) {
+      break // Invalid candle data, stop fetching
+    }
     currentStartTime = (lastCandle[6] as number) + 1 // closeTime is at index 6
   }
 
   const klines = allKlines
 
+  if (klines.length === 0) {
+    throw new Error(`No data received from Binance for symbol ${cleanSymbol}. Please check if the symbol is valid.`)
+  }
+
   const candlestickData: CandlestickData[] = []
   const volumeData: HistogramData[] = []
 
   for (const kline of klines) {
+    // Validate kline structure
+    if (!Array.isArray(kline) || kline.length < 6) {
+      console.warn('Invalid kline data:', kline)
+      continue // Skip invalid data
+    }
+
     // Binance response format: [openTime, open, high, low, close, volume, closeTime, ...]
-    const openTime = Number(kline[0])
-    const open = parseFloat(String(kline[1]))
-    const high = parseFloat(String(kline[2]))
-    const low = parseFloat(String(kline[3]))
-    const close = parseFloat(String(kline[4]))
-    const volume = parseFloat(String(kline[5]))
+    const openTime = kline[0]
+    const open = kline[1]
+    const high = kline[2]
+    const low = kline[3]
+    const close = kline[4]
+    const volume = kline[5]
+
+    // Validate all required values exist
+    if (openTime === undefined || open === undefined || high === undefined || 
+        low === undefined || close === undefined || volume === undefined) {
+      console.warn('Missing data in kline:', kline)
+      continue // Skip invalid data
+    }
+
+    const openTimeNum = Number(openTime)
+    const openNum = parseFloat(String(open))
+    const highNum = parseFloat(String(high))
+    const lowNum = parseFloat(String(low))
+    const closeNum = parseFloat(String(close))
+    const volumeNum = parseFloat(String(volume))
+
+    // Validate parsed numbers
+    if (isNaN(openTimeNum) || isNaN(openNum) || isNaN(highNum) || 
+        isNaN(lowNum) || isNaN(closeNum) || isNaN(volumeNum)) {
+      console.warn('Invalid number in kline:', kline)
+      continue // Skip invalid data
+    }
 
     // Convert milliseconds to UNIX seconds (Lightweight Charts best practice)
-    const time = Math.floor(openTime / 1000) as Time
+    const time = Math.floor(openTimeNum / 1000) as Time
 
     // Determine color based on price movement
-    const color = close >= open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+    const color = closeNum >= openNum ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)'
 
     candlestickData.push({
       time,
-      open,
-      high,
-      low,
-      close,
+      open: openNum,
+      high: highNum,
+      low: lowNum,
+      close: closeNum,
     })
 
     volumeData.push({
       time,
-      value: volume,
+      value: volumeNum,
       color,
     })
   }
@@ -494,8 +541,8 @@ export default function LightweightPriceChart({
         const binanceInterval = mapIntervalToBinance(interval)
         const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol, binanceInterval, timeRange)
         
-        if (candlestickData.length === 0) {
-          throw new Error('No data received from Binance')
+        if (!candlestickData || candlestickData.length === 0) {
+          throw new Error('No valid data received from Binance. The symbol may not exist or there may be no historical data available.')
         }
 
         // Update main series based on chart type
