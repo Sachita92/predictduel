@@ -6,11 +6,15 @@ import {
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
+  AreaSeries,
+  BaselineSeries,
   IChartApi,
   ISeriesApi,
   CandlestickData,
   HistogramData,
   LineData,
+  AreaData,
+  BaselineData,
   Time,
   MouseEventParams,
 } from 'lightweight-charts'
@@ -18,6 +22,7 @@ import {
 type Interval = '1s' | '15s' | '30s' | '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '8h' | '12h' | '1d' | '1w' | '1M'
 type TimeRange = '5y' | '1y' | '6m' | '3m' | '1m' | '5d' | '1d'
 type Indicator = 'RSI' | 'MACD' | 'none' | string
+type ChartType = 'Bars' | 'Candles' | 'Hollow Candles' | 'Line' | 'Line with markers' | 'Step line' | 'Area' | 'HLC area' | 'Baseline' | 'Columns' | 'High-low' | 'Heikin Ashi'
 
 interface LightweightPriceChartProps {
   symbol: string // e.g., "BINANCE:SOLUSDT"
@@ -178,6 +183,73 @@ async function fetchBinanceOHLC(
   return { candlestickData, volumeData }
 }
 
+// Convert candlestick data to different chart formats
+function convertToLineData(candlestickData: CandlestickData[]): LineData[] {
+  return candlestickData.map(d => ({ time: d.time, value: d.close }))
+}
+
+function convertToAreaData(candlestickData: CandlestickData[]): AreaData[] {
+  return candlestickData.map(d => ({ time: d.time, value: d.close }))
+}
+
+function convertToBaselineData(candlestickData: CandlestickData[]): BaselineData[] {
+  const firstClose = candlestickData[0]?.close || 0
+  return candlestickData.map(d => ({ time: d.time, value: d.close, baselineValue: firstClose }))
+}
+
+function convertToBarData(candlestickData: CandlestickData[]): HistogramData[] {
+  return candlestickData.map(d => ({
+    time: d.time,
+    value: d.close,
+    color: d.close >= d.open ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)',
+  }))
+}
+
+function convertToHighLowData(candlestickData: CandlestickData[]): LineData[] {
+  return candlestickData.map(d => ({ time: d.time, value: d.high }))
+}
+
+// Calculate Heikin Ashi candlesticks
+function calculateHeikinAshi(candlestickData: CandlestickData[]): CandlestickData[] {
+  if (candlestickData.length === 0) return []
+  
+  const haData: CandlestickData[] = []
+  const first = candlestickData[0]
+  
+  let haClose = (first.open + first.high + first.low + first.close) / 4
+  let haOpen = (first.open + first.close) / 2
+  let haHigh = first.high
+  let haLow = first.low
+  
+  haData.push({
+    time: first.time,
+    open: haOpen,
+    high: haHigh,
+    low: haLow,
+    close: haClose,
+  })
+  
+  for (let i = 1; i < candlestickData.length; i++) {
+    const prev = haData[i - 1]
+    const curr = candlestickData[i]
+    
+    haClose = (curr.open + curr.high + curr.low + curr.close) / 4
+    haOpen = (prev.open + prev.close) / 2
+    haHigh = Math.max(curr.high, haOpen, haClose)
+    haLow = Math.min(curr.low, haOpen, haClose)
+    
+    haData.push({
+      time: curr.time,
+      open: haOpen,
+      high: haHigh,
+      low: haLow,
+      close: haClose,
+    })
+  }
+  
+  return haData
+}
+
 export default function LightweightPriceChart({
   symbol,
   interval: initialInterval = '1h',
@@ -189,15 +261,18 @@ export default function LightweightPriceChart({
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null)
+  const mainSeriesRef = useRef<ISeriesApi<'Candlestick' | 'Line' | 'Area' | 'Baseline' | 'Histogram', Time> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram', Time> | null>(null)
   const rsiSeriesRef = useRef<ISeriesApi<'Line', Time> | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [interval, setInterval] = useState<Interval>(initialInterval)
   const [timeRange, setTimeRange] = useState<TimeRange>('1y')
   const [indicator, setIndicator] = useState<Indicator>('none')
+  const [chartType, setChartType] = useState<ChartType>('Candles')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showDisplayOptions, setShowDisplayOptions] = useState(false)
   const [showIntervalDropdown, setShowIntervalDropdown] = useState(false)
+  const [showChartTypeDropdown, setShowChartTypeDropdown] = useState(false)
   const [indicatorSearch, setIndicatorSearch] = useState('')
   const [tooltipData, setTooltipData] = useState<{
     price: string
@@ -264,7 +339,129 @@ export default function LightweightPriceChart({
 
     chartRef.current = chart
 
-    // Candlestick series (v5+ way)
+    // Function to create/update main series based on chart type
+    const createMainSeries = (type: ChartType, data: CandlestickData[]) => {
+      // Remove existing main series if any
+      if (mainSeriesRef.current) {
+        chart.removeSeries(mainSeriesRef.current)
+        mainSeriesRef.current = null
+      }
+      if (candlestickSeriesRef.current) {
+        chart.removeSeries(candlestickSeriesRef.current)
+        candlestickSeriesRef.current = null
+      }
+
+      let series: ISeriesApi<any, Time> | null = null
+
+      switch (type) {
+        case 'Candles':
+          series = chart.addSeries(CandlestickSeries, {
+            upColor,
+            downColor,
+            borderVisible: true,
+            wickUpColor: upColor,
+            wickDownColor: downColor,
+            borderUpColor: upColor,
+            borderDownColor: downColor,
+          })
+          candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
+          series.setData(data)
+          break
+
+        case 'Hollow Candles':
+          // Hollow candles: up candles are hollow, down candles are filled
+          series = chart.addSeries(CandlestickSeries, {
+            upColor: 'transparent',
+            downColor,
+            borderVisible: true,
+            wickUpColor: upColor,
+            wickDownColor: downColor,
+            borderUpColor: upColor,
+            borderDownColor: downColor,
+          })
+          candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
+          series.setData(data)
+          break
+
+        case 'Heikin Ashi':
+          const haData = calculateHeikinAshi(data)
+          series = chart.addSeries(CandlestickSeries, {
+            upColor,
+            downColor,
+            borderVisible: true,
+            wickUpColor: upColor,
+            wickDownColor: downColor,
+            borderUpColor: upColor,
+            borderDownColor: downColor,
+          })
+          candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
+          series.setData(haData)
+          break
+
+        case 'Line':
+        case 'Line with markers':
+        case 'Step line':
+          series = chart.addSeries(LineSeries, {
+            color: upColor,
+            lineWidth: 2,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            crosshairMarkerVisible: true,
+            lineStyle: type === 'Step line' ? 2 : 0, // Step line style
+            pointMarkersVisible: type === 'Line with markers',
+          })
+          series.setData(convertToLineData(data))
+          break
+
+        case 'Area':
+        case 'HLC area':
+          series = chart.addSeries(AreaSeries, {
+            lineColor: upColor,
+            topColor: upColor + '40',
+            bottomColor: upColor + '00',
+            lineWidth: 2,
+          })
+          series.setData(convertToAreaData(data))
+          break
+
+        case 'Baseline':
+          series = chart.addSeries(BaselineSeries, {
+            baseValue: { type: 'price', price: data[0]?.close || 0 },
+            topLineColor: upColor,
+            bottomLineColor: downColor,
+            topFillColor1: upColor + '40',
+            topFillColor2: upColor + '00',
+            bottomFillColor1: downColor + '40',
+            bottomFillColor2: downColor + '00',
+            lineWidth: 2,
+          })
+          series.setData(convertToBaselineData(data))
+          break
+
+        case 'Bars':
+        case 'Columns':
+          series = chart.addSeries(HistogramSeries, {
+            color: upColor,
+            priceFormat: { type: 'price' },
+          })
+          series.setData(convertToBarData(data))
+          break
+
+        case 'High-low':
+          series = chart.addSeries(LineSeries, {
+            color: upColor,
+            lineWidth: 1,
+            priceLineVisible: false,
+          })
+          series.setData(convertToHighLowData(data))
+          break
+      }
+
+      mainSeriesRef.current = series
+      return series
+    }
+
+    // Create initial series
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor,
       downColor,
@@ -276,6 +473,7 @@ export default function LightweightPriceChart({
     })
 
     candlestickSeriesRef.current = candlestickSeries
+    mainSeriesRef.current = candlestickSeries
 
     // Volume series (optional)
     if (showVolume) {
@@ -300,7 +498,8 @@ export default function LightweightPriceChart({
           throw new Error('No data received from Binance')
         }
 
-        candlestickSeries.setData(candlestickData)
+        // Update main series based on chart type
+        createMainSeries(chartType, candlestickData)
 
         if (showVolume && volumeSeriesRef.current) {
           volumeSeriesRef.current.setData(volumeData)
@@ -378,7 +577,8 @@ export default function LightweightPriceChart({
         return
       }
 
-      const data = param.seriesData.get(candlestickSeries) as CandlestickData | undefined
+      // Get data from main series (works with all chart types)
+      const data = param.seriesData.get(mainSeriesRef.current || candlestickSeries) as CandlestickData | LineData | AreaData | BaselineData | HistogramData | undefined
       if (!data) {
         setTooltipData(null)
         return
@@ -391,9 +591,19 @@ export default function LightweightPriceChart({
         timeStr = new Date(param.time * 1000).toLocaleDateString()
       }
 
-      const price = data.close.toFixed(2)
+      // Extract price value based on data type
+      let price: number
+      if ('close' in data) {
+        price = data.close
+      } else if ('value' in data) {
+        price = data.value
+      } else {
+        setTooltipData(null)
+        return
+      }
+      const priceStr = price.toFixed(2)
       setTooltipData({
-        price: `$${price}`,
+        price: `$${priceStr}`,
         time: timeStr,
         visible: true,
         x: param.point.x,
@@ -426,7 +636,7 @@ export default function LightweightPriceChart({
         chartRef.current = null
       }
     }
-  }, [symbol, interval, timeRange, indicator, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
+  }, [symbol, interval, timeRange, indicator, chartType, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
 
   // Fullscreen functionality
   const toggleFullscreen = () => {
@@ -462,11 +672,14 @@ export default function LightweightPriceChart({
       if (showIntervalDropdown && !target.closest('[data-dropdown="intervals"]')) {
         setShowIntervalDropdown(false)
       }
+      if (showChartTypeDropdown && !target.closest('[data-dropdown="chart-type"]')) {
+        setShowChartTypeDropdown(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showDisplayOptions, showIntervalDropdown])
+  }, [showDisplayOptions, showIntervalDropdown, showChartTypeDropdown])
 
   // Screenshot functionality - uses browser's print/screenshot capabilities
   const takeScreenshot = () => {
@@ -693,7 +906,49 @@ export default function LightweightPriceChart({
             )}
           </div>
           
-          {/* Indicators Button - Right after interval selector */}
+          {/* Chart Type Dropdown - Bars */}
+          <div className="relative" data-dropdown="chart-type">
+            <button
+              onClick={() => setShowChartTypeDropdown(!showChartTypeDropdown)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-all duration-150 ${
+                showChartTypeDropdown
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              {chartType}
+            </button>
+            
+            {showChartTypeDropdown && (
+              <div className="absolute left-0 top-full mt-1.5 bg-[#1a1d29] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[180px] overflow-hidden">
+                <div className="py-2">
+                  {(['Bars', 'Candles', 'Hollow Candles', 'Line', 'Line with markers', 'Step line', 'Area', 'HLC area', 'Baseline', 'Columns', 'High-low', 'Heikin Ashi'] as ChartType[]).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setChartType(type)
+                        setShowChartTypeDropdown(false)
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs rounded-md transition-all flex items-center gap-2 ${
+                        chartType === type
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {type}
+                      {chartType === type && (
+                        <svg className="w-3 h-3 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Indicators Button - Right after chart type */}
           <div className="relative" data-dropdown="indicators">
             <button
               onClick={() => setShowDisplayOptions(!showDisplayOptions)}
@@ -703,7 +958,7 @@ export default function LightweightPriceChart({
                   : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
               }`}
             >
-              f Indicators
+              Indicators
             </button>
           </div>
         </div>
@@ -852,23 +1107,6 @@ export default function LightweightPriceChart({
           </div>
         </div>
       )}
-
-      {/* Time Range Selector - Jupiter Style (Bottom) */}
-      <div className="flex items-center justify-center gap-1 px-3 py-2 border-t border-white/5">
-        {(['5y', '1y', '6m', '3m', '1m', '5d', '1d'] as TimeRange[]).map((range) => (
-          <button
-            key={range}
-            onClick={() => setTimeRange(range)}
-            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 ${
-              timeRange === range
-                ? 'bg-white/10 text-white'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            {range}
-          </button>
-        ))}
-      </div>
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background-darker/80 rounded-lg">
