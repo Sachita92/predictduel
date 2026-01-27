@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import {
   createChart,
   CandlestickSeries,
@@ -102,11 +102,34 @@ function getTimeRangeMs(timeRange: TimeRange): number {
   }
 }
 
-// Fetch OHLC data from Binance API with time range support
+// Data cache for fetched OHLC data
+interface CacheEntry {
+  data: {
+    candlestickData: CandlestickData[]
+    volumeData: HistogramData[]
+  }
+  timestamp: number
+}
+
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const dataCache = new Map<string, CacheEntry>()
+
+// Clean expired cache entries (runs periodically)
+function cleanExpiredCache() {
+  const now = Date.now()
+  Array.from(dataCache.entries()).forEach(([key, entry]) => {
+    if (now >= entry.timestamp + CACHE_DURATION) {
+      dataCache.delete(key)
+    }
+  })
+}
+
+// Fetch OHLC data from Binance API with time range support and caching
 async function fetchBinanceOHLC(
   symbol: string,
   interval: string = '1d',
-  timeRange: TimeRange = '1y'
+  timeRange: TimeRange = '1y',
+  signal?: AbortSignal
 ): Promise<{
   candlestickData: CandlestickData[]
   volumeData: HistogramData[]
@@ -127,6 +150,22 @@ async function fetchBinanceOHLC(
     throw new Error(`Invalid symbol after processing: ${symbol}`)
   }
 
+  // Check cache first
+  const cacheKey = `${cleanSymbol}-${interval}-${timeRange}`
+  const cached = dataCache.get(cacheKey)
+  if (cached && Date.now() < cached.timestamp + CACHE_DURATION) {
+    // Return cached data if not expired
+    return cached.data
+  }
+
+  // Clean expired entries periodically
+  cleanExpiredCache()
+
+  // Check if request was aborted before fetching
+  if (signal?.aborted) {
+    throw new DOMException('Request aborted', 'AbortError')
+  }
+
   const startTime = getTimeRangeMs(timeRange)
   const endTime = Date.now()
   
@@ -137,9 +176,14 @@ async function fetchBinanceOHLC(
   const maxLimit = 1000
 
   while (currentStartTime < endTime) {
+    // Check if request was aborted before each fetch
+    if (signal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError')
+    }
+
     const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(cleanSymbol)}&interval=${encodeURIComponent(interval)}&startTime=${currentStartTime}&endTime=${endTime}&limit=${maxLimit}`
 
-    const response = await fetch(url)
+    const response = await fetch(url, { signal })
     if (!response.ok) {
       const errorText = await response.text()
       throw new Error(`Failed to fetch data from Binance: ${response.statusText} - ${errorText}`)
@@ -249,7 +293,14 @@ async function fetchBinanceOHLC(
     })
   }
 
-  return { candlestickData, volumeData }
+  // Store in cache before returning
+  const result = { candlestickData, volumeData }
+  dataCache.set(cacheKey, {
+    data: result,
+    timestamp: Date.now()
+  })
+
+  return result
 }
 
 // Convert candlestick data to different chart formats
@@ -334,6 +385,7 @@ export default function LightweightPriceChart({
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram', Time> | null>(null)
   const rsiSeriesRef = useRef<ISeriesApi<'Line', Time> | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [interval, setInterval] = useState<Interval>(initialInterval)
   const [timeRange, setTimeRange] = useState<TimeRange>('1y')
   const [indicator, setIndicator] = useState<Indicator>('none')
@@ -352,6 +404,8 @@ export default function LightweightPriceChart({
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [candlestickData, setCandlestickData] = useState<CandlestickData[]>([])
+  const [volumeData, setVolumeData] = useState<HistogramData[]>([])
 
   const isDark = theme === 'dark'
   const backgroundColor = isDark ? '#0f172a' : '#ffffff'
@@ -360,6 +414,36 @@ export default function LightweightPriceChart({
   const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
   const upColor = '#10b981'
   const downColor = '#ef4444'
+
+  // Memoize RSI calculation
+  const rsiData = useMemo(() => {
+    if (indicator !== 'RSI' || !candlestickData || candlestickData.length <= 14) {
+      return null
+    }
+    
+    const closes = candlestickData.map(d => d.close)
+    const rsiValues = calculateRSI(closes, 14)
+    
+    // Create RSI data points (skip first 14 points as RSI needs history)
+    const rsiDataPoints: LineData[] = []
+    for (let i = 14; i < candlestickData.length; i++) {
+      rsiDataPoints.push({
+        time: candlestickData[i].time,
+        value: rsiValues[i - 14],
+      })
+    }
+    
+    return rsiDataPoints.length > 0 ? rsiDataPoints : null
+  }, [indicator, candlestickData])
+
+  // Memoize Heikin Ashi calculation
+  const heikinAshiData = useMemo(() => {
+    if (chartType !== 'Heikin Ashi' || !candlestickData || candlestickData.length === 0) {
+      return null
+    }
+    
+    return calculateHeikinAshi(candlestickData)
+  }, [chartType, candlestickData])
 
   useEffect(() => {
     // Don't initialize if symbol is missing
@@ -420,9 +504,9 @@ export default function LightweightPriceChart({
       // Remove existing main series if any
       try {
         if (mainSeriesRef.current && chart) {
-          chart.removeSeries(mainSeriesRef.current)
-          mainSeriesRef.current = null
-        }
+        chart.removeSeries(mainSeriesRef.current)
+        mainSeriesRef.current = null
+      }
       } catch (error) {
         console.warn('Error removing main series:', error)
         mainSeriesRef.current = null
@@ -430,7 +514,7 @@ export default function LightweightPriceChart({
       
       try {
         if (candlestickSeriesRef.current && chart) {
-          chart.removeSeries(candlestickSeriesRef.current)
+        chart.removeSeries(candlestickSeriesRef.current)
           candlestickSeriesRef.current = null
         }
       } catch (error) {
@@ -458,7 +542,7 @@ export default function LightweightPriceChart({
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
           if (series && data.length > 0) {
-            series.setData(data)
+          series.setData(data)
           }
           break
 
@@ -475,7 +559,7 @@ export default function LightweightPriceChart({
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
           if (series && data.length > 0) {
-            series.setData(data)
+          series.setData(data)
           }
           break
 
@@ -492,7 +576,7 @@ export default function LightweightPriceChart({
           })
           candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
           if (series && haData.length > 0) {
-            series.setData(haData)
+          series.setData(haData)
           }
           break
 
@@ -601,6 +685,15 @@ export default function LightweightPriceChart({
 
     // Fetch and load real data from Binance
     const loadData = async () => {
+      // Cancel any previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      // Create new AbortController for this request
+      const abortController = new AbortController()
+      abortControllerRef.current = abortController
+
       try {
         // Validate symbol before fetching
         if (!symbol || typeof symbol !== 'string' || symbol.trim().length === 0) {
@@ -610,65 +703,66 @@ export default function LightweightPriceChart({
         setIsLoading(true)
         setError(null)
         const binanceInterval = mapIntervalToBinance(interval)
-        const { candlestickData, volumeData } = await fetchBinanceOHLC(symbol, binanceInterval, timeRange)
+        const { candlestickData: fetchedData, volumeData: fetchedVolume } = await fetchBinanceOHLC(
+          symbol, 
+          binanceInterval, 
+          timeRange,
+          abortController.signal
+        )
         
-        if (!candlestickData || candlestickData.length === 0) {
+        // Check if request was aborted
+        if (abortController.signal.aborted) {
+          return // Don't update state if aborted
+        }
+        
+        if (!fetchedData || fetchedData.length === 0) {
           throw new Error('No valid data received from Binance. The symbol may not exist or there may be no historical data available.')
         }
+
+        // Store data in state for memoization
+        setCandlestickData(fetchedData)
+        setVolumeData(fetchedVolume)
 
         // Update main series based on chart type
         if (!chart || !chartRef.current) {
           throw new Error('Chart not initialized. Cannot set data.')
         }
         
-        createMainSeries(chartType, candlestickData)
+        // Use regular data for initial load (memoized values will update via separate effect)
+        createMainSeries(chartType, fetchedData)
 
-        if (showVolume && volumeSeriesRef.current && volumeData && volumeData.length > 0) {
-          volumeSeriesRef.current.setData(volumeData)
+        if (showVolume && volumeSeriesRef.current && fetchedVolume && fetchedVolume.length > 0) {
+          volumeSeriesRef.current.setData(fetchedVolume)
         }
 
-        // Calculate and add RSI if indicator is selected
-        if (indicator === 'RSI' && candlestickData.length > 14) {
-          const closes = candlestickData.map(d => d.close)
-          const rsiValues = calculateRSI(closes, 14)
-          
-          // Create RSI data points (skip first 14 points as RSI needs history)
-          const rsiData: LineData[] = []
-          for (let i = 14; i < candlestickData.length; i++) {
-            rsiData.push({
-              time: candlestickData[i].time,
-              value: rsiValues[i - 14],
+        // Use memoized RSI data if available
+        if (indicator === 'RSI' && rsiData) {
+          if (!rsiSeriesRef.current) {
+            // Create RSI series in a separate pane
+            const rsiSeries = chart.addSeries(LineSeries, {
+              color: '#a855f7',
+              lineWidth: 2,
+              priceScaleId: 'rsi',
+              priceFormat: {
+                type: 'price',
+                precision: 2,
+                minMove: 0.01,
+              },
+            })
+            rsiSeriesRef.current = rsiSeries
+            
+            // Configure RSI price scale (0-100 range)
+            chart.priceScale('rsi').applyOptions({
+              scaleMargins: {
+                top: 0.8,
+                bottom: 0,
+              },
+              borderVisible: false,
             })
           }
-
-          if (rsiData.length > 0) {
-            if (!rsiSeriesRef.current) {
-              // Create RSI series in a separate pane
-              const rsiSeries = chart.addSeries(LineSeries, {
-                color: '#a855f7',
-                lineWidth: 2,
-                priceScaleId: 'rsi',
-                priceFormat: {
-                  type: 'price',
-                  precision: 2,
-                  minMove: 0.01,
-                },
-              })
-              rsiSeriesRef.current = rsiSeries
-              
-              // Configure RSI price scale (0-100 range)
-              chart.priceScale('rsi').applyOptions({
-                scaleMargins: {
-                  top: 0.8,
-                  bottom: 0,
-                },
-                borderVisible: false,
-              })
-            }
-            
-            if (rsiSeriesRef.current && rsiData && rsiData.length > 0) {
-              rsiSeriesRef.current.setData(rsiData)
-            }
+          
+          if (rsiSeriesRef.current && rsiData.length > 0) {
+            rsiSeriesRef.current.setData(rsiData)
           }
         } else if (rsiSeriesRef.current && indicator !== 'RSI') {
           // Remove RSI series if indicator is disabled
@@ -684,6 +778,17 @@ export default function LightweightPriceChart({
         
         setIsLoading(false)
       } catch (error) {
+        // Ignore abort errors
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('Request cancelled')
+          return
+        }
+        
+        // Check if request was aborted before setting error
+        if (abortController.signal.aborted) {
+          return
+        }
+        
         const errorMessage = error instanceof Error ? error.message : 'Failed to load chart data'
         console.error('Error fetching Binance data:', error)
         setError(errorMessage)
@@ -768,6 +873,12 @@ export default function LightweightPriceChart({
 
     // Cleanup function for useEffect
     return () => {
+      // Cancel any in-flight requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect()
         resizeObserverRef.current = null
@@ -777,7 +888,85 @@ export default function LightweightPriceChart({
         chartRef.current = null
       }
     }
-  }, [symbol, interval, timeRange, indicator, chartType, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
+  }, [symbol, interval, timeRange, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
+
+  // Separate effect to update chart when chart type or indicator changes (using memoized values)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickData || candlestickData.length === 0) return
+
+    const chart = chartRef.current
+
+    // Update chart type with memoized Heikin Ashi if needed
+    if (chartType === 'Heikin Ashi' && heikinAshiData) {
+      // Remove existing series
+      try {
+        if (mainSeriesRef.current && chart) {
+          chart.removeSeries(mainSeriesRef.current)
+          mainSeriesRef.current = null
+        }
+        if (candlestickSeriesRef.current && chart) {
+          chart.removeSeries(candlestickSeriesRef.current)
+          candlestickSeriesRef.current = null
+        }
+      } catch (error) {
+        console.warn('Error removing series:', error)
+      }
+
+      // Create new series with Heikin Ashi data
+      const series = chart.addSeries(CandlestickSeries, {
+        upColor,
+        downColor,
+        borderVisible: true,
+        wickUpColor: upColor,
+        wickDownColor: downColor,
+        borderUpColor: upColor,
+        borderDownColor: downColor,
+      })
+      candlestickSeriesRef.current = series as ISeriesApi<'Candlestick', Time>
+      mainSeriesRef.current = series
+      if (series && heikinAshiData.length > 0) {
+        series.setData(heikinAshiData)
+      }
+    }
+
+    // Update RSI with memoized data
+    if (indicator === 'RSI' && rsiData) {
+      if (!rsiSeriesRef.current) {
+        const rsiSeries = chart.addSeries(LineSeries, {
+          color: '#a855f7',
+          lineWidth: 2,
+          priceScaleId: 'rsi',
+          priceFormat: {
+            type: 'price',
+            precision: 2,
+            minMove: 0.01,
+          },
+        })
+        rsiSeriesRef.current = rsiSeries
+        
+        chart.priceScale('rsi').applyOptions({
+          scaleMargins: {
+            top: 0.8,
+            bottom: 0,
+          },
+          borderVisible: false,
+        })
+      }
+      
+      if (rsiSeriesRef.current && rsiData.length > 0) {
+        rsiSeriesRef.current.setData(rsiData)
+      }
+    } else if (rsiSeriesRef.current && indicator !== 'RSI') {
+      try {
+        if (chart && rsiSeriesRef.current) {
+          chart.removeSeries(rsiSeriesRef.current)
+        }
+      } catch (error) {
+        console.warn('Error removing RSI series:', error)
+      }
+      rsiSeriesRef.current = null
+    }
+  }, [chartType, indicator, heikinAshiData, rsiData, candlestickData, upColor, downColor])
 
   // Fullscreen functionality
   const toggleFullscreen = () => {

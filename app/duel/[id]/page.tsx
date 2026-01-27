@@ -803,6 +803,35 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       .reduce((sum, p) => sum + p.stake, 0) || 0,
     [duel?.participants]
   )
+
+  // Calculate potential payout and odds based on current pool distribution
+  const totalPool = useMemo(() => (duel?.poolSize || 0) + betAmount, [duel?.poolSize, betAmount])
+  
+  // Calculate potential payout if betting YES
+  const yesPayout = useMemo(() => {
+    if (totalPool === 0 || betAmount === 0) return 0
+    const newYesPool = yesStake + betAmount
+    if (newYesPool === 0) return 0
+    // Payout = (your_stake / winning_pool) * total_pool
+    return (betAmount / newYesPool) * totalPool
+  }, [yesStake, betAmount, totalPool])
+
+  // Calculate potential payout if betting NO
+  const noPayout = useMemo(() => {
+    if (totalPool === 0 || betAmount === 0) return 0
+    const newNoPool = noStake + betAmount
+    if (newNoPool === 0) return 0
+    // Payout = (your_stake / winning_pool) * total_pool
+    return (betAmount / newNoPool) * totalPool
+  }, [noStake, betAmount, totalPool])
+
+  // Calculate profit (payout - stake)
+  const yesProfit = yesPayout - betAmount
+  const noProfit = noPayout - betAmount
+
+  // Calculate implied probability (current odds)
+  const yesProbability = totalPool > 0 ? (yesStake / totalPool) * 100 : 50
+  const noProbability = totalPool > 0 ? (noStake / totalPool) * 100 : 50
   
   const handleYesBet = useCallback(() => {
     if (canBet && !isBetting) {
@@ -1160,7 +1189,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                       {isBetting && selectedPrediction === 'yes' ? (
                         <Loader2 className="animate-spin" size={24} />
                       ) : (
-                        <>YES <span className="ml-2 text-sm opacity-80">45¢</span></>
+                        <>YES <span className="ml-2 text-sm opacity-80">
+                          {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
+                        </span></>
                       )}
                     </button>
                     
@@ -1173,7 +1204,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                       {isBetting && selectedPrediction === 'no' ? (
                         <Loader2 className="animate-spin" size={24} />
                       ) : (
-                        <>NO <span className="ml-2 text-sm opacity-80">56¢</span></>
+                        <>NO <span className="ml-2 text-sm opacity-80">
+                          {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
+                        </span></>
                       )}
                     </button>
                   </div>
@@ -1181,14 +1214,20 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   {canBet && (
                     <div className="mt-4 p-3 bg-white/5 rounded-lg text-xs text-white/60">
                       <div className="flex items-center justify-between mb-1">
-                        <span>To win</span>
+                        <span>Potential Payout (YES)</span>
                         <span className="text-success font-semibold">
-                          ${((betAmount / 0.45) - betAmount).toFixed(2)}
+                          {yesPayout > 0 ? `${yesPayout.toFixed(2)} ${currency}` : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span>Potential Payout (NO)</span>
+                        <span className="text-white/80 font-semibold">
+                          {noPayout > 0 ? `${noPayout.toFixed(2)} ${currency}` : '—'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Avg. Price</span>
-                        <span>45¢</span>
+                        <span>Current Odds</span>
+                        <span>YES: {yesProbability.toFixed(1)}% | NO: {noProbability.toFixed(1)}%</span>
                       </div>
                     </div>
                   )}
