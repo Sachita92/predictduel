@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo } from 'react'
+import { Eye, EyeOff, Settings, Trash2, MoreVertical } from 'lucide-react'
 import {
   createChart,
   CandlestickSeries,
@@ -99,6 +100,37 @@ function getTimeRangeMs(timeRange: TimeRange): number {
       return now - 24 * 60 * 60 * 1000
     default:
       return now - 365 * 24 * 60 * 60 * 1000 // Default to 1 year
+  }
+}
+
+// Automatically determine optimal time range based on interval
+// This prevents fetching excessive data for small intervals (e.g., 1-minute candles)
+function getOptimalTimeRange(interval: Interval): TimeRange {
+  switch (interval) {
+    case '1s':
+    case '15s':
+    case '30s':
+    case '1m':
+      return '1d' // 1 day for 1-minute intervals (max ~1,440 candles)
+    case '3m':
+    case '5m':
+      return '5d' // 5 days (max ~2,400 candles)
+    case '15m':
+    case '30m':
+      return '1m' // 1 month (max ~2,880 candles)
+    case '1h':
+    case '2h':
+    case '4h':
+    case '8h':
+    case '12h':
+      return '3m' // 3 months (max ~2,160 candles)
+    case '1d':
+      return '1y' // 1 year (365 candles)
+    case '1w':
+    case '1M':
+      return '5y' // 5 years
+    default:
+      return '1y'
   }
 }
 
@@ -387,7 +419,8 @@ export default function LightweightPriceChart({
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const [interval, setInterval] = useState<Interval>(initialInterval)
-  const [timeRange, setTimeRange] = useState<TimeRange>('1y')
+  // Automatically set optimal timeRange based on interval
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => getOptimalTimeRange(initialInterval))
   const [indicator, setIndicator] = useState<Indicator>('none')
   const [chartType, setChartType] = useState<ChartType>('Candles')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -406,6 +439,15 @@ export default function LightweightPriceChart({
   const [isLoading, setIsLoading] = useState(true)
   const [candlestickData, setCandlestickData] = useState<CandlestickData[]>([])
   const [volumeData, setVolumeData] = useState<HistogramData[]>([])
+  const [rsiPeriod, setRsiPeriod] = useState<number>(14)
+  const [rsiVisible, setRsiVisible] = useState<boolean>(true)
+  const [indicatorToolbar, setIndicatorToolbar] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    indicator: string
+  } | null>(null)
+  const [showRsiSettings, setShowRsiSettings] = useState(false)
 
   const isDark = theme === 'dark'
   const backgroundColor = isDark ? '#0f172a' : '#ffffff'
@@ -415,26 +457,34 @@ export default function LightweightPriceChart({
   const upColor = '#10b981'
   const downColor = '#ef4444'
 
+  // Automatically adjust timeRange when interval changes
+  useEffect(() => {
+    const optimalTimeRange = getOptimalTimeRange(interval)
+    if (timeRange !== optimalTimeRange) {
+      setTimeRange(optimalTimeRange)
+    }
+  }, [interval]) // Only depend on interval to avoid infinite loops
+
   // Memoize RSI calculation
   const rsiData = useMemo(() => {
-    if (indicator !== 'RSI' || !candlestickData || candlestickData.length <= 14) {
+    if (indicator !== 'RSI' || !candlestickData || candlestickData.length <= rsiPeriod) {
       return null
     }
     
     const closes = candlestickData.map(d => d.close)
-    const rsiValues = calculateRSI(closes, 14)
+    const rsiValues = calculateRSI(closes, rsiPeriod)
     
     // Create RSI data points (skip first 14 points as RSI needs history)
     const rsiDataPoints: LineData[] = []
-    for (let i = 14; i < candlestickData.length; i++) {
+    for (let i = rsiPeriod; i < candlestickData.length; i++) {
       rsiDataPoints.push({
         time: candlestickData[i].time,
-        value: rsiValues[i - 14],
+        value: rsiValues[i - rsiPeriod],
       })
     }
     
     return rsiDataPoints.length > 0 ? rsiDataPoints : null
-  }, [indicator, candlestickData])
+  }, [indicator, candlestickData, rsiPeriod])
 
   // Memoize Heikin Ashi calculation
   const heikinAshiData = useMemo(() => {
@@ -686,7 +736,7 @@ export default function LightweightPriceChart({
     // Fetch and load real data from Binance
     const loadData = async () => {
       // Cancel any previous request
-      if (abortControllerRef.current) {
+      if (abortControllerRef.current) { 
         abortControllerRef.current.abort()
       }
 
@@ -763,6 +813,10 @@ export default function LightweightPriceChart({
           
           if (rsiSeriesRef.current && rsiData.length > 0) {
             rsiSeriesRef.current.setData(rsiData)
+            // Apply visibility
+            rsiSeriesRef.current.applyOptions({
+              visible: rsiVisible,
+            })
           }
         } else if (rsiSeriesRef.current && indicator !== 'RSI') {
           // Remove RSI series if indicator is disabled
@@ -809,7 +863,34 @@ export default function LightweightPriceChart({
         !param.time
       ) {
         setTooltipData(null)
+        // Hide indicator toolbar when crosshair is out of bounds
+        if (indicatorToolbar) {
+          setIndicatorToolbar(null)
+        }
         return
+      }
+
+      // Check if hovering over RSI line
+      if (indicator === 'RSI' && rsiSeriesRef.current && rsiVisible) {
+        const rsiData = param.seriesData.get(rsiSeriesRef.current) as LineData | undefined
+        if (rsiData && 'value' in rsiData && typeof rsiData.value === 'number') {
+          // Show indicator toolbar
+          const containerRect = chartContainerRef.current!.getBoundingClientRect()
+          setIndicatorToolbar({
+            visible: true,
+            x: param.point.x + containerRect.left,
+            y: param.point.y + containerRect.top - 50, // Position above the line
+            indicator: 'RSI',
+          })
+        } else {
+          // Only hide if we're not currently showing the toolbar (to prevent flicker)
+          // The toolbar will hide when mouse leaves the line area
+        }
+      } else if (indicator !== 'RSI' || !rsiVisible) {
+        // Hide toolbar if RSI is not active or not visible
+        if (indicatorToolbar && indicatorToolbar.indicator === 'RSI') {
+          setIndicatorToolbar(null)
+        }
       }
 
       // Get data from main series (works with all chart types)
@@ -955,6 +1036,9 @@ export default function LightweightPriceChart({
       
       if (rsiSeriesRef.current && rsiData.length > 0) {
         rsiSeriesRef.current.setData(rsiData)
+        rsiSeriesRef.current.applyOptions({
+          visible: rsiVisible,
+        })
       }
     } else if (rsiSeriesRef.current && indicator !== 'RSI') {
       try {
@@ -966,7 +1050,16 @@ export default function LightweightPriceChart({
       }
       rsiSeriesRef.current = null
     }
-  }, [chartType, indicator, heikinAshiData, rsiData, candlestickData, upColor, downColor])
+  }, [chartType, indicator, heikinAshiData, rsiData, candlestickData, upColor, downColor, rsiVisible])
+
+  // Update RSI visibility when rsiVisible changes
+  useEffect(() => {
+    if (rsiSeriesRef.current && indicator === 'RSI') {
+      rsiSeriesRef.current.applyOptions({
+        visible: rsiVisible,
+      })
+    }
+  }, [rsiVisible, indicator])
 
   // Fullscreen functionality
   const toggleFullscreen = () => {
@@ -1466,6 +1559,122 @@ export default function LightweightPriceChart({
           <div className="text-emerald-400 font-semibold">{tooltipData.price}</div>
           <div className="text-slate-300">{tooltipData.time}</div>
         </div>
+      )}
+
+      {/* Indicator Toolbar - appears on hover over indicator line */}
+      {indicatorToolbar && indicatorToolbar.visible && indicator === 'RSI' && (
+        <div
+          className="fixed z-50 bg-[#1a1d29] border border-blue-500 rounded-lg shadow-xl flex items-center gap-2 px-3 py-2"
+          style={{
+            left: `${indicatorToolbar.x}px`,
+            top: `${indicatorToolbar.y}px`,
+            transform: 'translateX(-50%)',
+          }}
+          onMouseEnter={(e) => {
+            e.stopPropagation()
+            // Keep toolbar visible when hovering over it
+          }}
+          onMouseLeave={() => {
+            setIndicatorToolbar(null)
+          }}
+        >
+          <span className="text-blue-400 font-medium text-sm">RSI</span>
+          <span className="text-white text-sm">{rsiPeriod}</span>
+          
+          {/* Eye icon - Toggle visibility */}
+          <button
+            onClick={() => {
+              setRsiVisible(!rsiVisible)
+            }}
+            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+            title={rsiVisible ? 'Hide RSI' : 'Show RSI'}
+          >
+            {rsiVisible ? (
+              <Eye size={14} className="text-white/80" />
+            ) : (
+              <EyeOff size={14} className="text-white/40" />
+            )}
+          </button>
+
+          {/* Settings icon - Configure RSI period */}
+          <button
+            onClick={() => {
+              setShowRsiSettings(!showRsiSettings)
+            }}
+            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+            title="RSI Settings"
+          >
+            <Settings size={14} className="text-white/80" />
+          </button>
+
+          {/* Trash icon - Remove indicator */}
+          <button
+            onClick={() => {
+              setIndicator('none')
+              setIndicatorToolbar(null)
+            }}
+            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+            title="Remove RSI"
+          >
+            <Trash2 size={14} className="text-white/80" />
+          </button>
+
+          {/* Three dots - More options */}
+          <button
+            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+            title="More options"
+          >
+            <MoreVertical size={14} className="text-white/80" />
+          </button>
+        </div>
+      )}
+
+      {/* RSI Settings Modal */}
+      {showRsiSettings && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50"
+            onClick={() => setShowRsiSettings(false)}
+          />
+          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-[#1a1d29] border border-white/10 rounded-lg p-4 shadow-xl min-w-[300px]">
+            <h3 className="text-lg font-semibold text-white mb-4">RSI Settings</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-white/80 mb-2">Period</label>
+                <input
+                  type="number"
+                  min="2"
+                  max="100"
+                  value={rsiPeriod}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value)
+                    if (value >= 2 && value <= 100) {
+                      setRsiPeriod(value)
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                />
+                <p className="text-xs text-white/60 mt-1">Range: 2-100</p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowRsiSettings(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRsiSettings(false)
+                  }}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white text-sm transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

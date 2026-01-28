@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Share2, MessageCircle, Loader2, ArrowLeft, X } from 'lucide-react'
+import { Share2, MessageCircle, Loader2, ArrowLeft, X, MoreVertical, Edit, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
@@ -101,6 +101,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [isPostingComment, setIsPostingComment] = useState(false)
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editCommentText, setEditCommentText] = useState('')
+  const [isEditingComment, setIsEditingComment] = useState(false)
+  const [isDeletingComment, setIsDeletingComment] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   
   const walletAddress = useMemo(() => getWalletAddress(user, APP_BLOCKCHAIN), [user])
   const currency = useMemo(() => getAppCurrency(), [])
@@ -290,6 +295,90 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setIsPostingComment(false)
     }
   }, [user, commentText, id])
+
+  const handleEditComment = useCallback(async (commentId: string) => {
+    if (!user || !editCommentText.trim()) return
+    
+    setIsEditingComment(true)
+    setCommentError(null)
+    
+    try {
+      const response = await fetch(`/api/duels/${id}/comments`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commentId,
+          privyId: user.id,
+          text: editCommentText.trim(),
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update comment')
+      }
+      
+      // Update comment in the list
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, text: data.comment.text }
+            : c
+        )
+      )
+      setEditingCommentId(null)
+      setEditCommentText('')
+      setOpenMenuId(null)
+    } catch (error) {
+      console.error('Error updating comment:', error)
+      setCommentError(error instanceof Error ? error.message : 'Failed to update comment')
+    } finally {
+      setIsEditingComment(false)
+    }
+  }, [user, editCommentText, id])
+
+  const handleDeleteComment = useCallback(async (commentId: string) => {
+    if (!user) return
+    
+    setIsDeletingComment(true)
+    setCommentError(null)
+    
+    try {
+      const response = await fetch(`/api/duels/${id}/comments?commentId=${commentId}&privyId=${user.id}`, {
+        method: 'DELETE',
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete comment')
+      }
+      
+      // Remove comment from the list
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+      setOpenMenuId(null)
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      setCommentError(error instanceof Error ? error.message : 'Failed to delete comment')
+    } finally {
+      setIsDeletingComment(false)
+    }
+  }, [user, id])
+
+  const startEditComment = useCallback((comment: { id: string; text: string }) => {
+    setEditingCommentId(comment.id)
+    setEditCommentText(comment.text)
+    setOpenMenuId(null)
+  }, [])
+
+  const cancelEditComment = useCallback(() => {
+    setEditingCommentId(null)
+    setEditCommentText('')
+    setOpenMenuId(null)
+  }, [])
   
   const handleBet = useCallback(async (prediction: 'yes' | 'no') => {
     // Prevent double-submission
@@ -1861,35 +1950,132 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           ) : (
             <div className="space-y-4">
-              {comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="p-4 bg-white/5 rounded-lg"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center font-bold text-white flex-shrink-0">
-                      {comment.user.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold">@{comment.user.username}</span>
-                        <span className="text-xs text-white/60">
-                          {new Date(comment.createdAt).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+              {comments.map((comment) => {
+                const isCurrentUser = currentUserId && comment.user.id === currentUserId
+                const isEditing = editingCommentId === comment.id
+                
+                return (
+                  <div
+                    key={comment.id}
+                    className="p-4 bg-white/5 rounded-lg relative"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center font-bold text-white flex-shrink-0">
+                        {comment.user.username.charAt(0).toUpperCase()}
                       </div>
-                      <p className="text-white/90 whitespace-pre-wrap break-words">
-                        {comment.text}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">@{comment.user.username}</span>
+                            <span className="text-xs text-white/60">
+                              {new Date(comment.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                          
+                          {/* Three-dot menu - only show for current user's comments */}
+                          {isCurrentUser && !isEditing && (
+                            <div className="relative">
+                              <button
+                                onClick={() => setOpenMenuId(openMenuId === comment.id ? null : comment.id)}
+                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                disabled={isDeletingComment}
+                              >
+                                <MoreVertical size={16} className="text-white/60" />
+                              </button>
+                              
+                              {/* Dropdown menu */}
+                              {openMenuId === comment.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setOpenMenuId(null)}
+                                  />
+                                  <div className="absolute right-0 top-8 z-20 bg-[#1a1d29] border border-white/10 rounded-lg shadow-xl min-w-[120px] overflow-hidden">
+                                    <button
+                                      onClick={() => startEditComment(comment)}
+                                      className="w-full px-4 py-2 text-left text-sm text-white/90 hover:bg-white/10 flex items-center gap-2 transition-colors"
+                                    >
+                                      <Edit size={14} />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm('Are you sure you want to delete this comment?')) {
+                                          handleDeleteComment(comment.id)
+                                        } else {
+                                          setOpenMenuId(null)
+                                        }
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-sm text-danger hover:bg-danger/10 flex items-center gap-2 transition-colors"
+                                      disabled={isDeletingComment}
+                                    >
+                                      <Trash2 size={14} />
+                                      {isDeletingComment ? 'Deleting...' : 'Delete'}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Edit mode */}
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={editCommentText}
+                              onChange={(e) => setEditCommentText(e.target.value)}
+                              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-primary-from focus:outline-none text-white placeholder-white/40 resize-none"
+                              rows={3}
+                              maxLength={500}
+                              disabled={isEditingComment}
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-white/60">
+                                {editCommentText.length}/500 characters
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={cancelEditComment}
+                                  className="px-3 py-1.5 text-sm bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                  disabled={isEditingComment}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleEditComment(comment.id)}
+                                  disabled={isEditingComment || !editCommentText.trim()}
+                                  className="px-3 py-1.5 text-sm bg-primary-from hover:bg-primary-to rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isEditingComment ? (
+                                    <>
+                                      <Loader2 className="animate-spin inline mr-1" size={14} />
+                                      Saving...
+                                    </>
+                                  ) : (
+                                    'Save'
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-white/90 whitespace-pre-wrap break-words">
+                            {comment.text}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </Card>
