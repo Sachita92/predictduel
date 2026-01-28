@@ -95,6 +95,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       id: string
       username: string
       avatar: string
+      privyId?: string | null
     }
   }>>([])
   const [commentText, setCommentText] = useState('')
@@ -285,8 +286,15 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
         throw new Error(data.error || 'Failed to post comment')
       }
       
-      // Add new comment to the list
-      setComments((prev) => [data.comment, ...prev])
+      // Add new comment to the list (ensure privyId is included)
+      const newComment = {
+        ...data.comment,
+        user: {
+          ...data.comment.user,
+          privyId: user?.id || null,
+        },
+      }
+      setComments((prev) => [newComment, ...prev])
       setCommentText('')
     } catch (error) {
       console.error('Error posting comment:', error)
@@ -1951,7 +1959,11 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
             <div className="space-y-4">
               {comments.map((comment) => {
-                const isCurrentUser = currentUserId && comment.user.id === currentUserId
+                // Check if current user owns the comment - compare by privyId (most reliable)
+                const isCurrentUserByPrivyId = user?.id && comment.user.privyId === user.id
+                // Fallback: compare by MongoDB ID if privyId not available
+                const isCurrentUserById = currentUserId && comment.user.id === currentUserId
+                const isCurrentUser = isCurrentUserByPrivyId || isCurrentUserById
                 const isEditing = editingCommentId === comment.id
                 
                 return (
@@ -1979,7 +1991,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                           </div>
                           
                           {/* Three-dot menu - only show for current user's comments */}
-                          {isCurrentUser && !isEditing && (
+                          {authenticated && isCurrentUser && !isEditing && (
                             <div className="relative">
                               <button
                                 onClick={() => setOpenMenuId(openMenuId === comment.id ? null : comment.id)}

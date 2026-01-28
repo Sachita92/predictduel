@@ -35,7 +35,7 @@ export async function GET(
 
     // Fetch comments with user info, sorted by newest first
     const comments = await Comment.find({ duel: duelId })
-      .populate('user', 'username avatar')
+      .populate('user', 'username avatar privyId')
       .sort({ createdAt: -1 })
       .lean()
 
@@ -48,6 +48,7 @@ export async function GET(
         id: comment.user._id.toString(),
         username: comment.user.username,
         avatar: comment.user.avatar,
+        privyId: comment.user.privyId || null,
       },
     }))
 
@@ -142,6 +143,7 @@ export async function POST(
           id: (comment.user as any)._id.toString(),
           username: (comment.user as any).username,
           avatar: (comment.user as any).avatar,
+          privyId: (comment.user as any).privyId || null,
         },
       },
     })
