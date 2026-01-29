@@ -11,6 +11,7 @@ interface CountdownTimerProps {
 
 export default function CountdownTimer({ targetDate, className, onComplete }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState({
+    days: 0,
     hours: 0,
     minutes: 0,
     seconds: 0,
@@ -24,16 +25,18 @@ export default function CountdownTimer({ targetDate, className, onComplete }: Co
       const difference = target - now
       
       if (difference <= 0) {
-        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, total: 0 })
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 })
         onComplete?.()
         return
       }
       
-      const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
-      const minutes = Math.floor((difference / (1000 * 60)) % 60)
-      const seconds = Math.floor((difference / 1000) % 60)
+      // Calculate days, hours, minutes, and seconds properly
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000)
       
-      setTimeLeft({ hours, minutes, seconds, total: difference })
+      setTimeLeft({ days, hours, minutes, seconds, total: difference })
     }
     
     calculateTimeLeft()
@@ -47,6 +50,17 @@ export default function CountdownTimer({ targetDate, className, onComplete }: Co
   
   const formatTime = (value: number) => String(value).padStart(2, '0')
   
+  // Format display based on time remaining
+  const formatDisplay = () => {
+    if (timeLeft.days > 0) {
+      // Show days and hours when more than 24 hours remain
+      return `${timeLeft.days}d ${formatTime(timeLeft.hours)}h`
+    } else {
+      // Show HH:MM:SS format when less than 24 hours remain
+      return `${formatTime(timeLeft.hours)}:${formatTime(timeLeft.minutes)}:${formatTime(timeLeft.seconds)}`
+    }
+  }
+  
   return (
     <div className={cn(
       'flex items-center gap-2',
@@ -57,7 +71,7 @@ export default function CountdownTimer({ targetDate, className, onComplete }: Co
         'px-4 py-2 rounded-lg font-mono font-bold text-lg',
         isVeryUrgent ? 'bg-danger text-white' : isUrgent ? 'bg-accent text-white' : 'bg-white/10 text-white'
       )}>
-        {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:{formatTime(timeLeft.seconds)}
+        {formatDisplay()}
       </div>
     </div>
   )

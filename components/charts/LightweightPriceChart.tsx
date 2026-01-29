@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { Eye, EyeOff, Settings, Trash2, MoreVertical } from 'lucide-react'
 import {
   createChart,
@@ -448,6 +448,12 @@ export default function LightweightPriceChart({
     indicator: string
   } | null>(null)
   const [showRsiSettings, setShowRsiSettings] = useState(false)
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+  const [timezone, setTimezone] = useState<string>(() => {
+    // Default to user's local timezone
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  })
+  const settingsMenuRef = useRef<HTMLDivElement>(null)
 
   const isDark = theme === 'dark'
   const backgroundColor = isDark ? '#0f172a' : '#ffffff'
@@ -464,6 +470,58 @@ export default function LightweightPriceChart({
       setTimeRange(optimalTimeRange)
     }
   }, [interval]) // Only depend on interval to avoid infinite loops
+
+  // Helper function to format time with timezone
+  const formatTimeWithTimezone = useCallback((timestamp: number): string => {
+    const date = new Date(timestamp * 1000)
+    return date.toLocaleString('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }, [timezone])
+
+  // Update chart localization when timezone changes
+  useEffect(() => {
+    if (chartRef.current) {
+      const timeFormatter = (businessDayOrTimestamp: number) => {
+        const date = new Date(businessDayOrTimestamp * 1000)
+        return date.toLocaleString('en-US', {
+          timeZone: timezone,
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      }
+      
+      chartRef.current.applyOptions({
+        localization: {
+          timeFormatter: timeFormatter,
+        },
+      })
+    }
+  }, [timezone])
+
+  // Close settings menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
+        setShowSettingsMenu(false)
+      }
+    }
+    
+    if (showSettingsMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showSettingsMenu])
 
   // Memoize RSI calculation
   const rsiData = useMemo(() => {
@@ -520,6 +578,18 @@ export default function LightweightPriceChart({
       setError(null)
       setIsLoading(true)
 
+      // Create custom time formatter for the selected timezone
+      const timeFormatter = (businessDayOrTimestamp: number) => {
+        const date = new Date(businessDayOrTimestamp * 1000)
+        return date.toLocaleString('en-US', {
+          timeZone: timezone,
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      }
+
       const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: backgroundColor },
@@ -537,6 +607,9 @@ export default function LightweightPriceChart({
         borderColor,
         timeVisible: true,
         secondsVisible: false,
+      },
+      localization: {
+        timeFormatter: timeFormatter,
       },
       width: containerWidth,
       height,
@@ -909,7 +982,16 @@ export default function LightweightPriceChart({
       if (typeof param.time === 'string') {
         timeStr = param.time
       } else if (typeof param.time === 'number') {
-        timeStr = new Date(param.time * 1000).toLocaleDateString()
+        // Format time with selected timezone
+        const date = new Date(param.time * 1000)
+        timeStr = date.toLocaleString('en-US', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
       }
 
       // Extract price value based on data type
@@ -969,7 +1051,7 @@ export default function LightweightPriceChart({
         chartRef.current = null
       }
     }
-  }, [symbol, interval, timeRange, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark])
+  }, [symbol, interval, timeRange, height, theme, showVolume, backgroundColor, textColor, gridColor, borderColor, isDark, timezone])
 
   // Separate effect to update chart when chart type or indicator changes (using memoized values)
   useEffect(() => {
@@ -1406,12 +1488,70 @@ export default function LightweightPriceChart({
         <div className="flex items-center gap-1">
 
           {/* Settings Icon - Jupiter Style */}
-          <button className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-md transition-all duration-150">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+          <div className="relative" ref={settingsMenuRef}>
+            <button 
+              onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+              className={`p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-md transition-all duration-150 ${showSettingsMenu ? 'bg-white/10 text-slate-300' : ''}`}
+              title="Settings"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            
+            {/* Settings Dropdown Menu */}
+            {showSettingsMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowSettingsMenu(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 z-20 bg-slate-900 border border-slate-700 rounded-lg shadow-xl min-w-[280px] max-h-[400px] overflow-hidden">
+                  <div className="p-3 border-b border-slate-700">
+                    <h3 className="text-sm font-semibold text-slate-200">Chart Settings</h3>
+                  </div>
+                  <div className="p-3">
+                    <label className="block text-xs font-medium text-slate-300 mb-2">
+                      Timezone
+                    </label>
+                    <select
+                      value={timezone}
+                      onChange={(e) => {
+                        setTimezone(e.target.value)
+                        setShowSettingsMenu(false)
+                      }}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="America/New_York">Eastern Time (ET)</option>
+                      <option value="America/Chicago">Central Time (CT)</option>
+                      <option value="America/Denver">Mountain Time (MT)</option>
+                      <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                      <option value="America/Phoenix">Arizona Time (MST)</option>
+                      <option value="America/Anchorage">Alaska Time (AKT)</option>
+                      <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                      <option value="UTC">UTC</option>
+                      <option value="Europe/London">London (GMT/BST)</option>
+                      <option value="Europe/Paris">Paris (CET/CEST)</option>
+                      <option value="Europe/Berlin">Berlin (CET/CEST)</option>
+                      <option value="Europe/Moscow">Moscow (MSK)</option>
+                      <option value="Asia/Dubai">Dubai (GST)</option>
+                      <option value="Asia/Kolkata">Mumbai (IST)</option>
+                      <option value="Asia/Shanghai">Shanghai (CST)</option>
+                      <option value="Asia/Tokyo">Tokyo (JST)</option>
+                      <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                      <option value="Asia/Singapore">Singapore (SGT)</option>
+                      <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+                      <option value="Australia/Melbourne">Melbourne (AEDT/AEST)</option>
+                    </select>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Chart times will be displayed in the selected timezone
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Screenshot Icon - Jupiter Style */}
           <button
