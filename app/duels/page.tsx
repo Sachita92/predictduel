@@ -483,8 +483,12 @@ export default function DuelsPage() {
 
                   {/* Creator */}
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold">
-                      {duel.creator.username.charAt(0).toUpperCase()}
+                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold overflow-hidden">
+                      {duel.creator.avatar ? (
+                        <img src={duel.creator.avatar} alt={duel.creator.username} className="w-full h-full object-cover" />
+                      ) : (
+                        duel.creator.username.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <span className="text-sm text-white/70">
                       @{duel.creator.username}

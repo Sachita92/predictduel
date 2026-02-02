@@ -14,6 +14,7 @@ import { getWalletBalance, formatBalance } from '@/lib/wallet-balance'
 
 interface UserProfile {
   username: string
+  avatar?: string
   stats: {
     wins: number
     losses: number
@@ -119,8 +120,12 @@ export default function UserInfoCard() {
     <Card variant="glass" className="p-6">
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold glow-effect">
-            {profile?.username ? profile.username.charAt(0).toUpperCase() : <User size={28} />}
+          <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold glow-effect overflow-hidden">
+            {profile?.avatar ? (
+              <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              profile?.username ? profile.username.charAt(0).toUpperCase() : <User size={28} />
+            )}
           </div>
           <div>
             <h2 className="text-xl font-bold">

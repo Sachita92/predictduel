@@ -221,12 +221,16 @@ export default function LeaderboardPage() {
                             </motion.div>
                           )}
                           <div className={`
-                            w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold
+                            w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold overflow-hidden
                             ${isTop ? 'bg-white/20' : 'gradient-primary'}
                           `}>
-                            {user.avatar || user.username.charAt(0).toUpperCase()}
+                            {user.avatar ? (
+                              <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                            ) : (
+                              user.username.charAt(0).toUpperCase()
+                            )}
                           </div>
-                          <div className="font-bold text-lg mb-1">{user.username}</div>
+                          <div className="font-bold text-lg mb-1 truncate px-2">{user.username || 'Anonymous'}</div>
                           <div className="flex items-center justify-center gap-1 text-accent mb-2">
                             <Flame size={16} />
                             <span className="text-sm font-semibold">{user.streak} streak</span>
@@ -250,16 +254,20 @@ export default function LeaderboardPage() {
                         transition={{ delay: 0.3 + index * 0.05 }}
                       >
                         <Card variant="glass" hover className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
                               <div className="text-2xl font-bold text-white/40 w-8">
                                 {user.rank}
                               </div>
-                              <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
-                                {user.avatar || user.username.charAt(0).toUpperCase()}
+                              <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
+                                {user.avatar ? (
+                                  <img src={user.avatar} alt={user.username || 'User'} className="w-full h-full object-cover" />
+                                ) : (
+                                  (user.username || 'A').charAt(0).toUpperCase()
+                                )}
                               </div>
-                              <div>
-                                <div className="font-semibold">{user.username}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold truncate">{user.username || 'Anonymous'}</div>
                                 <div className="flex items-center gap-2 text-sm text-white/60">
                                   <span className="flex items-center gap-1">
                                     <Flame size={12} className="text-accent" />
@@ -270,7 +278,7 @@ export default function LeaderboardPage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex-shrink-0">
                               <div className="font-bold text-lg">{user.totalWon.toFixed(2)} SOL</div>
                               <div className="text-xs text-white/40">{user.wins} wins</div>
                             </div>

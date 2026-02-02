@@ -1167,6 +1167,21 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
           
+          {/* Creator Info */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-sm font-bold overflow-hidden">
+              {duel.creator.avatar ? (
+                <img src={duel.creator.avatar} alt={duel.creator.username} className="w-full h-full object-cover" />
+              ) : (
+                duel.creator.username.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-white/60 mb-0.5">Created by</div>
+              <div className="text-sm font-semibold text-white/90">@{duel.creator.username}</div>
+            </div>
+          </div>
+
           {/* Question with Timer and Status on the right */}
           <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
             <h1 className="text-3xl md:text-4xl font-bold font-display flex-1 min-w-0">{duel.question}</h1>
@@ -2032,10 +2047,14 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold overflow-hidden ${
                       participant.prediction === 'yes' ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
                     }`}>
-                      {participant.user.username.charAt(0).toUpperCase()}
+                      {participant.user.avatar ? (
+                        <img src={participant.user.avatar} alt={participant.user.username} className="w-full h-full object-cover" />
+                      ) : (
+                        participant.user.username.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <div className="font-semibold">@{participant.user.username}</div>
@@ -2134,8 +2153,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     className="p-4 bg-white/5 rounded-lg relative"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center font-bold text-white flex-shrink-0">
-                        {comment.user.username.charAt(0).toUpperCase()}
+                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden">
+                        {comment.user.avatar ? (
+                          <img src={comment.user.avatar} alt={comment.user.username} className="w-full h-full object-cover" />
+                        ) : (
+                          comment.user.username.charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">

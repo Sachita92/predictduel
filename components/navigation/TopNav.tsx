@@ -7,6 +7,12 @@ import { useRouter } from 'next/navigation'
 import { usePrivy } from '@privy-io/react-auth'
 import Button from '@/components/ui/Button'
 
+interface UserProfile {
+  username: string
+  name?: string
+  avatar?: string
+}
+
 // Lazy load heavy modals
 const SearchModal = lazy(() => import('@/components/search/SearchModal'))
 const NotificationDropdown = lazy(() => import('@/components/notifications/NotificationDropdown'))
@@ -19,6 +25,7 @@ export default function TopNav() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   
   // Fetch initial unread count
   useEffect(() => {
@@ -31,6 +38,20 @@ export default function TopNav() {
           }
         })
         .catch(err => console.error('Error fetching unread count:', err))
+    }
+  }, [authenticated, user?.id])
+
+  // Fetch user profile for avatar
+  useEffect(() => {
+    if (authenticated && user?.id) {
+      fetch(`/api/profile?privyId=${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.user) {
+            setProfile(data.user)
+          }
+        })
+        .catch(err => console.error('Error fetching profile:', err))
     }
   }, [authenticated, user?.id])
   
@@ -76,9 +97,13 @@ export default function TopNav() {
                 <button
                   type="button"
                   onClick={() => setIsProfileOpen(true)}
-                  className="p-2 rounded-full gradient-primary hover:scale-110 transition-transform glow-effect"
+                  className="p-2 rounded-full gradient-primary hover:scale-110 transition-transform glow-effect overflow-hidden"
                 >
-                  <User size={20} className="text-white" />
+                  {profile?.avatar ? (
+                    <img src={profile.avatar} alt="Profile" className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <User size={20} className="text-white" />
+                  )}
                 </button>
               ) : (
                 <Button size="sm" variant="secondary" onClick={handleWalletClick}>

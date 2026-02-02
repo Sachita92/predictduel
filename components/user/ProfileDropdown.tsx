@@ -13,6 +13,7 @@ import { getWalletBalance, formatBalance } from '@/lib/wallet-balance'
 interface UserProfile {
   username: string
   name?: string
+  avatar?: string
   stats: {
     wins: number
     losses: number
@@ -175,8 +176,12 @@ export default function ProfileDropdown({ isOpen, onClose }: ProfileDropdownProp
             {/* Header */}
             <div className="p-4 border-b border-white/10 bg-gradient-to-r from-primary-from/20 to-primary-to/20">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-xl font-bold">
-                  {profile?.name ? profile.name.charAt(0).toUpperCase() : profile?.username?.charAt(0).toUpperCase() || <User size={20} />}
+                <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-xl font-bold overflow-hidden">
+                  {profile?.avatar ? (
+                    <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    profile?.name ? profile.name.charAt(0).toUpperCase() : profile?.username?.charAt(0).toUpperCase() || <User size={20} />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   {loadingProfile ? (
