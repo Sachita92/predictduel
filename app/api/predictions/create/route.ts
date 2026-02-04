@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
 import Notification from '@/models/Notification'
+import ProbabilityHistory from '@/models/ProbabilityHistory'
 
 /**
  * API Route to Create a New Duel
@@ -112,6 +113,30 @@ export async function POST(req: NextRequest) {
       ...(marketPda && { marketPda }),
       ...(transactionSignature && { transactionSignature }),
     })
+
+    // Record initial probability snapshot
+    try {
+      const initialYesStake = parseFloat(stake) // Creator's stake goes to "yes" by default
+      const initialNoStake = 0
+      const initialTotalStake = parseFloat(stake)
+      const initialYesProbability = 100 // 100% yes initially (only creator)
+      const initialNoProbability = 0
+
+      await ProbabilityHistory.create({
+        duel: duel._id,
+        yesStake: initialYesStake,
+        noStake: initialNoStake,
+        yesProbability: initialYesProbability,
+        noProbability: initialNoProbability,
+        poolSize: initialTotalStake,
+        yesCount: 0,
+        noCount: 0,
+        timestamp: new Date(),
+      })
+    } catch (historyError) {
+      console.error('Error recording initial probability history:', historyError)
+      // Don't fail duel creation if history recording fails
+    }
 
     // Step 8: Create notifications for other users when a public duel is created
     // Notify all users (except the creator) about the new duel

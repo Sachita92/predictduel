@@ -297,9 +297,10 @@ export function LineChartComponent({
             axisLine={{ stroke: borderColor }}
             tickLine={{ stroke: borderColor }}
             label={xAxisLabel ? { value: xAxisLabel, position: 'insideBottom', offset: -5, fill: textColor } : undefined}
-            angle={-45}
-            textAnchor="end"
-            height={60}
+            angle={chartData.length > 1 ? -45 : 0}
+            textAnchor={chartData.length > 1 ? "end" : "middle"}
+            height={chartData.length > 1 ? 60 : 20}
+            hide={chartData.length === 1 && !xAxisLabel}
           />
           <YAxis
             domain={domain}

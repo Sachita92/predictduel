@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb'
 import Duel from '@/models/Duel'
 import User from '@/models/User'
 import Notification from '@/models/Notification'
+import ProbabilityHistory from '@/models/ProbabilityHistory'
 
 /**
  * API Route to Place a Bet on a Duel
@@ -166,6 +167,37 @@ export async function POST(
 
     // Save updated duel
     await duel.save()
+
+    // Record probability snapshot for historical tracking
+    try {
+      // Calculate current probabilities
+      const totalStake = duel.poolSize
+      const yesStake = duel.participants
+        .filter((p: any) => p.prediction === 'yes')
+        .reduce((sum: number, p: any) => sum + p.stake, 0)
+      const noStake = duel.participants
+        .filter((p: any) => p.prediction === 'no')
+        .reduce((sum: number, p: any) => sum + p.stake, 0)
+      
+      const yesProbability = totalStake > 0 ? (yesStake / totalStake) * 100 : 50
+      const noProbability = totalStake > 0 ? (noStake / totalStake) * 100 : 50
+
+      // Create probability history snapshot
+      await ProbabilityHistory.create({
+        duel: duel._id,
+        yesStake,
+        noStake,
+        yesProbability,
+        noProbability,
+        poolSize: duel.poolSize,
+        yesCount: duel.yesCount,
+        noCount: duel.noCount,
+        timestamp: new Date(),
+      })
+    } catch (historyError) {
+      console.error('Error recording probability history:', historyError)
+      // Don't fail the bet if history recording fails
+    }
 
     return NextResponse.json(
       {

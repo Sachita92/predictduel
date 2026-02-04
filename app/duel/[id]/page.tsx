@@ -11,7 +11,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
 import PredictionMarketChart from '@/components/charts/PredictionMarketChart'
-import ProbabilityBarChart from '@/components/charts/ProbabilityBarChart'
+import { LineChartComponent, LineChartData } from '@/components/charts/ProbabilityBarChart'
 import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
@@ -102,6 +102,20 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
   const [isPostingComment, setIsPostingComment] = useState(false)
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
+  
+  // Probability history state
+  const [probabilityHistory, setProbabilityHistory] = useState<Array<{
+    time: string
+    timestamp: Date
+    yesProbability: number
+    noProbability: number
+    yesStake: number
+    noStake: number
+    poolSize: number
+    yesCount: number
+    noCount: number
+  }>>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editCommentText, setEditCommentText] = useState('')
   const [isEditingComment, setIsEditingComment] = useState(false)
@@ -242,6 +256,23 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [id, currentUserId, walletAddress, user])
   
+  const fetchProbabilityHistory = useCallback(async () => {
+    if (!id) return
+    try {
+      setIsLoadingHistory(true)
+      const response = await fetch(`/api/duels/${id}/probability-history?limit=100&hours=168`) // Last 7 days
+      const data = await response.json()
+      
+      if (response.ok && data.success) {
+        setProbabilityHistory(data.history || [])
+      }
+    } catch (error) {
+      console.error('Error fetching probability history:', error)
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }, [id])
+
   const fetchComments = useCallback(async () => {
     if (!id) return
     try {
@@ -266,8 +297,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     if (id) {
       fetchDuel()
       fetchComments()
+      fetchProbabilityHistory()
     }
-  }, [id, fetchDuel, fetchComments])
+  }, [id, fetchDuel, fetchComments, fetchProbabilityHistory])
   
   const handlePostComment = useCallback(async () => {
     if (!user || !commentText.trim()) return
@@ -545,6 +577,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           // Transaction was successful but we're trying to submit it again
           // Refresh to get latest state
           await fetchDuel()
+          await fetchProbabilityHistory()
           setBetError('Transaction may have already been processed. Refreshing...')
           setTimeout(() => {
             setBetError(null)
@@ -557,8 +590,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
       setBetSuccess(true)
       setHasVoted(true) // Immediately mark as voted to disable buttons
       
-      // Refresh duel data without a full reload
+      // Refresh duel data and probability history
       await fetchDuel()
+      await fetchProbabilityHistory()
 
       // Clear success state after a short delay (no refetch)
       setTimeout(() => {
@@ -576,6 +610,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
           errorMessage.includes('Transaction simulation failed')) {
         // Transaction might have succeeded - refresh to check
         await fetchDuel()
+        await fetchProbabilityHistory()
         setBetError('Transaction may have already been processed. Please refresh the page to see your bet.')
       } else {
         setBetError(errorMessage)
@@ -584,7 +619,7 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsBetting(false)
     }
-  }, [duel, user, walletAddress, id, betAmount, currentUserId, fetchDuel, isBetting, wallets])
+  }, [duel, user, walletAddress, id, betAmount, currentUserId, fetchDuel, fetchProbabilityHistory, isBetting, wallets])
   
   const handleResolve = useCallback(async (outcome: 'yes' | 'no') => {
     if (!duel || !user || !walletAddress) {
@@ -1335,20 +1370,94 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     />
                   )
                 } else {
-                  // Show probability bar chart for non-price questions (e.g., "Will it rain?", "Will X win?")
+                  // Show probability line chart for non-price questions (e.g., "Will it rain?", "Will X win?")
                   const totalStake = yesStake + noStake
                   const yesProbability = totalStake > 0 ? (yesStake / totalStake) * 100 : 50
                   const noProbability = totalStake > 0 ? (noStake / totalStake) * 100 : 50
                   
+                  // Transform historical probability data for line chart
+                  let lineChartData: LineChartData[] = []
+                  
+                  if (probabilityHistory.length > 0) {
+                    // Use historical data if available
+                    lineChartData = probabilityHistory.map((entry, index) => {
+                      const date = new Date(entry.timestamp)
+                      // Format time as "HH:MM" or "MM/DD HH:MM" if different day
+                      const timeStr = date.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      })
+                      const dateStr = date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })
+                      
+                      // Show date if it's the first entry or if date changed
+                      const prevEntry = index > 0 ? probabilityHistory[index - 1] : null
+                      const showDate = !prevEntry || 
+                        new Date(prevEntry.timestamp).toDateString() !== date.toDateString()
+                      
+                      return {
+                        time: showDate ? `${dateStr} ${timeStr}` : timeStr,
+                        value: entry.yesProbability,
+                        label: `Yes: ${entry.yesProbability.toFixed(1)}% | No: ${entry.noProbability.toFixed(1)}%`,
+                      }
+                    })
+                  } else {
+                    // Fallback to current value if no history
+                    lineChartData = [
+                      { 
+                        time: 'Current', 
+                        value: yesProbability, 
+                        label: `Yes Probability: ${yesProbability.toFixed(1)}%` 
+                      },
+                    ]
+                  }
+                  
                   return (
-                    <ProbabilityBarChart
-                      yesProbability={yesProbability}
-                      noProbability={noProbability}
-                      yesLiquidity={yesStake}
-                      noLiquidity={noStake}
-                      height={400}
-                      theme="dark"
-                    />
+                    <div>
+                      {isLoadingHistory ? (
+                        <div className="flex items-center justify-center h-[400px]">
+                          <Loader2 className="animate-spin text-primary-from" size={32} />
+                        </div>
+                      ) : (
+                        <LineChartComponent
+                          data={lineChartData}
+                          height={400}
+                          theme="dark"
+                          lineColor="#10b981"
+                          showDots={lineChartData.length <= 20} // Only show dots if not too many points
+                          yAxisLabel="Yes Probability (%)"
+                          xAxisLabel=""
+                        />
+                      )}
+                      <div className="mt-3 text-xs text-center text-slate-400 space-y-1">
+                        <div>
+                          <span className="font-medium">Current Probabilities:</span>{' '}
+                          <span className="text-emerald-400">Yes {yesProbability.toFixed(1)}%</span>
+                          {' | '}
+                          <span className="text-red-400">No {noProbability.toFixed(1)}%</span>
+                        </div>
+                        {(yesStake !== undefined || noStake !== undefined) && (
+                          <div>
+                            <span className="font-medium">Liquidity:</span>{' '}
+                            <span className="text-emerald-400">
+                              Yes {yesStake >= 1000000 ? `${(yesStake / 1000000).toFixed(2)}M` : yesStake >= 1000 ? `${(yesStake / 1000).toFixed(2)}K` : yesStake.toFixed(0)}
+                            </span>
+                            {' | '}
+                            <span className="text-red-400">
+                              No {noStake >= 1000000 ? `${(noStake / 1000000).toFixed(2)}M` : noStake >= 1000 ? `${(noStake / 1000).toFixed(2)}K` : noStake.toFixed(0)}
+                            </span>
+                          </div>
+                        )}
+                        {probabilityHistory.length > 0 && (
+                          <div className="text-slate-500 text-[10px] mt-1">
+                            Showing {probabilityHistory.length} data point{probabilityHistory.length !== 1 ? 's' : ''} over time
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )
                 }
               })()}
