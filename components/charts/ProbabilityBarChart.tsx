@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
   LabelList,
   CartesianGrid,
+  LineChart,
+  Line,
 } from 'recharts'
 
 interface ProbabilityBarChartProps {
@@ -26,6 +28,25 @@ interface ChartDataItem {
   name: string
   Yes: number
   No: number
+}
+
+// Line Chart Interfaces
+export interface LineChartData {
+  time: string | number
+  value: number
+  label?: string
+}
+
+interface LineChartComponentProps {
+  data: LineChartData[]
+  height?: number
+  theme?: 'light' | 'dark'
+  className?: string
+  lineColor?: string
+  showDots?: boolean
+  showArea?: boolean
+  yAxisLabel?: string
+  xAxisLabel?: string
 }
 
 const CustomTooltip = ({ active, payload, theme = 'dark' }: any) => {
@@ -70,6 +91,30 @@ const CustomLabel = ({ x, y, width, value, fill }: any) => {
       {value.toFixed(1)}%
     </text>
   )
+}
+
+// Custom Tooltip for Line Chart
+const LineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload
+    const isDark = theme === 'dark'
+    
+    return (
+      <div
+        className={`rounded-lg px-3 py-2 shadow-xl border backdrop-blur-sm ${
+          isDark
+            ? 'bg-slate-800/95 border-slate-700/50 text-white'
+            : 'bg-white/90 border-gray-200/50 text-gray-900'
+        }`}
+      >
+        <p className="font-semibold mb-1">{data.time || data.label || 'Value'}</p>
+        <p className="text-sm" style={{ color: payload[0].color }}>
+          Value: <span className="font-medium">{data.value.toFixed(2)}</span>
+        </p>
+      </div>
+    )
+  }
+  return null
 }
 
 export default function ProbabilityBarChart({
@@ -191,6 +236,93 @@ export default function ProbabilityBarChart({
           </span>
         </div>
       )}
+    </div>
+  )
+}
+
+// Line Chart Component using Recharts
+export function LineChartComponent({
+  data,
+  height = 400,
+  theme = 'dark',
+  className = '',
+  lineColor,
+  showDots = true,
+  showArea = false,
+  yAxisLabel,
+  xAxisLabel,
+}: LineChartComponentProps) {
+  const isDark = theme === 'dark'
+  const textColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
+  const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+  const defaultLineColor = lineColor || (isDark ? '#3b82f6' : '#2563eb') // Blue color
+
+  if (!data || data.length === 0) {
+    return (
+      <div className={`w-full ${className} flex items-center justify-center`} style={{ height }}>
+        <p className={isDark ? 'text-white/60' : 'text-gray-600'}>No data available</p>
+      </div>
+    )
+  }
+
+  // Calculate min/max for domain with padding
+  const values = data.map(d => d.value)
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+  const valueRange = maxValue - minValue
+  const padding = valueRange * 0.1 || 1 // 10% padding, minimum 1
+
+  const domain = [Math.max(0, minValue - padding), maxValue + padding]
+
+  // Transform data for Recharts
+  const chartData = data.map((d) => ({
+    time: d.time,
+    value: d.value,
+    label: d.label,
+  }))
+
+  return (
+    <div className={`w-full ${className}`}>
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart
+          data={chartData}
+          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+          <XAxis
+            dataKey="time"
+            stroke={textColor}
+            tick={{ fill: textColor, fontSize: 12 }}
+            axisLine={{ stroke: borderColor }}
+            tickLine={{ stroke: borderColor }}
+            label={xAxisLabel ? { value: xAxisLabel, position: 'insideBottom', offset: -5, fill: textColor } : undefined}
+            angle={-45}
+            textAnchor="end"
+            height={60}
+          />
+          <YAxis
+            domain={domain}
+            stroke={textColor}
+            tick={{ fill: textColor, fontSize: 12 }}
+            axisLine={{ stroke: borderColor }}
+            tickLine={{ stroke: borderColor }}
+            width={60}
+            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fill: textColor } : undefined}
+          />
+          <Tooltip content={<LineChartTooltip theme={theme} />} />
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={defaultLineColor}
+            strokeWidth={2}
+            dot={showDots ? { fill: defaultLineColor, r: 4 } : false}
+            activeDot={{ r: 6, fill: defaultLineColor }}
+            isAnimationActive={true}
+            animationDuration={800}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   )
 }
