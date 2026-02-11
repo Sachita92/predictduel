@@ -11,7 +11,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import CountdownTimer from '@/components/ui/CountdownTimer'
 import PredictionMarketChart from '@/components/charts/PredictionMarketChart'
-import { LineChartComponent, LineChartData } from '@/components/charts/ProbabilityBarChart'
+import { LineChartComponent, LineChartData, DualLineChartData } from '@/components/charts/ProbabilityBarChart'
 import { getWalletAddress, getSolanaWalletProvider } from '@/lib/privy-helpers'
 import { APP_BLOCKCHAIN, getAppCurrency } from '@/lib/blockchain-config'
 import { placeBetOnChain } from '@/lib/solana-bet'
@@ -1381,12 +1381,12 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   const yesProbability = totalStake > 0 ? (yesStake / totalStake) * 100 : 50
                   const noProbability = totalStake > 0 ? (noStake / totalStake) * 100 : 50
                   
-                  // Transform historical probability data for line chart
-                  let lineChartData: LineChartData[] = []
+                  // Transform historical probability data for dual-line chart
+                  let dualLineChartData: DualLineChartData[] = []
                   
                   if (probabilityHistory.length > 0) {
                     // Use historical data if available
-                    lineChartData = probabilityHistory.map((entry, index) => {
+                    dualLineChartData = probabilityHistory.map((entry, index) => {
                       const date = new Date(entry.timestamp)
                       // Format time as "HH:MM" or "MM/DD HH:MM" if different day
                       const timeStr = date.toLocaleTimeString('en-US', { 
@@ -1406,17 +1406,23 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                       
                       return {
                         time: showDate ? `${dateStr} ${timeStr}` : timeStr,
-                        value: entry.yesProbability,
-                        label: `Yes: ${entry.yesProbability.toFixed(1)}% | No: ${entry.noProbability.toFixed(1)}%`,
+                        yesValue: entry.yesProbability,
+                        noValue: entry.noProbability,
+                        label: duel.options && duel.options.length === 2 
+                          ? `${duel.options[0]}: ${entry.yesProbability.toFixed(1)}% | ${duel.options[1]}: ${entry.noProbability.toFixed(1)}%`
+                          : `Yes: ${entry.yesProbability.toFixed(1)}% | No: ${entry.noProbability.toFixed(1)}%`,
                       }
                     })
                   } else {
                     // Fallback to current value if no history
-                    lineChartData = [
+                    dualLineChartData = [
                       { 
                         time: 'Current', 
-                        value: yesProbability, 
-                        label: `Yes Probability: ${yesProbability.toFixed(1)}%` 
+                        yesValue: yesProbability,
+                        noValue: noProbability,
+                        label: duel.options && duel.options.length === 2 
+                          ? `${duel.options[0]}: ${yesProbability.toFixed(1)}% | ${duel.options[1]}: ${noProbability.toFixed(1)}%`
+                          : `Yes: ${yesProbability.toFixed(1)}% | No: ${noProbability.toFixed(1)}%` 
                       },
                     ]
                   }
@@ -1429,31 +1435,37 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                         </div>
                       ) : (
                         <LineChartComponent
-                          data={lineChartData}
+                          showBothLines={true}
+                          dualLineData={dualLineChartData}
                           height={400}
                           theme="dark"
-                          lineColor="#10b981"
-                          showDots={lineChartData.length <= 20} // Only show dots if not too many points
-                          yAxisLabel="Yes Probability (%)"
+                          yesLineColor="#10b981"
+                          noLineColor="#ef4444"
+                          showDots={dualLineChartData.length <= 20} // Only show dots if not too many points
+                          yAxisLabel={duel.options && duel.options.length === 2 ? "Probability (%)" : "Probability (%)"}
                           xAxisLabel=""
                         />
                       )}
                       <div className="mt-3 text-xs text-center text-slate-400 space-y-1">
                         <div>
                           <span className="font-medium">Current Probabilities:</span>{' '}
-                          <span className="text-emerald-400">Yes {yesProbability.toFixed(1)}%</span>
+                          <span className="text-emerald-400">
+                            {duel.options && duel.options.length === 2 ? duel.options[0] : 'Yes'} {yesProbability.toFixed(1)}%
+                          </span>
                           {' | '}
-                          <span className="text-red-400">No {noProbability.toFixed(1)}%</span>
+                          <span className="text-red-400">
+                            {duel.options && duel.options.length === 2 ? duel.options[1] : 'No'} {noProbability.toFixed(1)}%
+                          </span>
                         </div>
                         {(yesStake !== undefined || noStake !== undefined) && (
                           <div>
                             <span className="font-medium">Liquidity:</span>{' '}
                             <span className="text-emerald-400">
-                              Yes {yesStake >= 1000000 ? `${(yesStake / 1000000).toFixed(2)}M` : yesStake >= 1000 ? `${(yesStake / 1000).toFixed(2)}K` : yesStake.toFixed(0)}
+                              {duel.options && duel.options.length === 2 ? duel.options[0] : 'Yes'} {yesStake >= 1000000 ? `${(yesStake / 1000000).toFixed(2)}M` : yesStake >= 1000 ? `${(yesStake / 1000).toFixed(2)}K` : yesStake.toFixed(0)}
                             </span>
                             {' | '}
                             <span className="text-red-400">
-                              No {noStake >= 1000000 ? `${(noStake / 1000000).toFixed(2)}M` : noStake >= 1000 ? `${(noStake / 1000).toFixed(2)}K` : noStake.toFixed(0)}
+                              {duel.options && duel.options.length === 2 ? duel.options[1] : 'No'} {noStake >= 1000000 ? `${(noStake / 1000000).toFixed(2)}M` : noStake >= 1000 ? `${(noStake / 1000).toFixed(2)}K` : noStake.toFixed(0)}
                             </span>
                           </div>
                         )}
@@ -1484,14 +1496,14 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     </span>
                   </div>
                   <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg">
-                    <span className="text-white/70">YES</span>
+                    <span className="text-white/70">{duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'}</span>
                     <div className="text-right">
                       <div className="text-lg font-bold text-success">{duel.yesCount}</div>
                       <div className="text-xs text-white/60">{yesStake.toFixed(2)} {currency}</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between p-3 bg-danger/10 rounded-lg">
-                    <span className="text-white/70">NO</span>
+                    <span className="text-white/70">{duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'}</span>
                     <div className="text-right">
                       <div className="text-lg font-bold text-danger">{duel.noCount}</div>
                       <div className="text-xs text-white/60">{noStake.toFixed(2)} {currency}</div>
@@ -1639,20 +1651,22 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   {canBet && (
                     <div className="mt-4 p-3 bg-white/5 rounded-lg text-xs text-white/60">
                       <div className="flex items-center justify-between mb-1">
-                        <span>Potential Payout (YES)</span>
+                        <span>Potential Payout ({duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'})</span>
                         <span className="text-success font-semibold">
                           {yesPayout > 0 ? `${yesPayout.toFixed(2)} ${currency}` : '—'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between mb-1">
-                        <span>Potential Payout (NO)</span>
+                        <span>Potential Payout ({duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'})</span>
                         <span className="text-white/80 font-semibold">
                           {noPayout > 0 ? `${noPayout.toFixed(2)} ${currency}` : '—'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Current Odds</span>
-                        <span>YES: {yesProbability.toFixed(1)}% | NO: {noProbability.toFixed(1)}%</span>
+                        <span>
+                          {duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'}: {yesProbability.toFixed(1)}% | {duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'}: {noProbability.toFixed(1)}%
+                        </span>
                       </div>
                     </div>
                   )}

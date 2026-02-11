@@ -25,7 +25,12 @@ const categories = [
 const quickDeadlines = [
   { label: '1hr', value: 3600000 },
   { label: '24hr', value: 86400000 },
+  { label: '3 days', value: 259200000 },
   { label: '1 week', value: 604800000 },
+  { label: '2 weeks', value: 1209600000 },
+  { label: '1 month', value: 2592000000 },
+  { label: '2 months', value: 5184000000 },
+  { label: '3 months', value: 7776000000 },
 ]
 
 export default function CreatePage() {
@@ -385,14 +390,14 @@ export default function CreatePage() {
                 
                 <div>
                   <label className="block mb-2 font-semibold">Deadline</label>
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {quickDeadlines.map((qd) => (
                       <button
                         key={qd.label}
                         type="button"
                         onClick={() => setDeadline(qd.value)}
                         className={`
-                          px-4 py-2 rounded-lg transition-all
+                          px-4 py-2 rounded-lg transition-all text-sm
                           ${deadline === qd.value
                             ? 'gradient-primary'
                             : 'bg-white/5 hover:bg-white/10'

@@ -37,8 +37,16 @@ export interface LineChartData {
   label?: string
 }
 
+// Dual-line chart data interface
+export interface DualLineChartData {
+  time: string | number
+  yesValue: number
+  noValue: number
+  label?: string
+}
+
 interface LineChartComponentProps {
-  data: LineChartData[]
+  data?: LineChartData[] // Optional when using dual-line mode
   height?: number
   theme?: 'light' | 'dark'
   className?: string
@@ -47,6 +55,11 @@ interface LineChartComponentProps {
   showArea?: boolean
   yAxisLabel?: string
   xAxisLabel?: string
+  // Dual-line support
+  showBothLines?: boolean
+  dualLineData?: DualLineChartData[]
+  yesLineColor?: string
+  noLineColor?: string
 }
 
 const CustomTooltip = ({ active, payload, theme = 'dark' }: any) => {
@@ -111,6 +124,32 @@ const LineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
         <p className="text-sm" style={{ color: payload[0].color }}>
           Value: <span className="font-medium">{data.value.toFixed(2)}</span>
         </p>
+      </div>
+    )
+  }
+  return null
+}
+
+// Custom Tooltip for Dual-Line Chart
+const DualLineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload
+    const isDark = theme === 'dark'
+    
+    return (
+      <div
+        className={`rounded-lg px-3 py-2 shadow-xl border backdrop-blur-sm ${
+          isDark
+            ? 'bg-slate-800/95 border-slate-700/50 text-white'
+            : 'bg-white/90 border-gray-200/50 text-gray-900'
+        }`}
+      >
+        <p className="font-semibold mb-2">{data.time || data.label || 'Value'}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm mb-1 last:mb-0" style={{ color: entry.color }}>
+            {entry.name}: <span className="font-medium">{entry.value.toFixed(2)}%</span>
+          </p>
+        ))}
       </div>
     )
   }
@@ -242,7 +281,7 @@ export default function ProbabilityBarChart({
 
 // Line Chart Component using Recharts
 export function LineChartComponent({
-  data,
+  data = [],
   height = 400,
   theme = 'dark',
   className = '',
@@ -251,19 +290,131 @@ export function LineChartComponent({
   showArea = false,
   yAxisLabel,
   xAxisLabel,
+  showBothLines = false,
+  dualLineData,
+  yesLineColor,
+  noLineColor,
 }: LineChartComponentProps) {
   const isDark = theme === 'dark'
   const textColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
   const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
   const defaultLineColor = lineColor || (isDark ? '#3b82f6' : '#2563eb') // Blue color
+  const defaultYesColor = yesLineColor || '#10b981' // emerald-500 (green)
+  const defaultNoColor = noLineColor || '#ef4444' // red-500 (red)
 
-  if (!data || data.length === 0) {
+  // Handle dual-line mode
+  if (showBothLines && dualLineData) {
+    if (!dualLineData || dualLineData.length === 0) {
+      return (
+        <div className={`w-full ${className} flex items-center justify-center`} style={{ height }}>
+          <p className={isDark ? 'text-white/60' : 'text-gray-600'}>No data available</p>
+        </div>
+      )
+    }
+
+    // Calculate domain for dual lines (0-100% for probabilities)
+    const allValues = dualLineData.flatMap(d => [d.yesValue, d.noValue])
+    const minValue = Math.min(...allValues)
+    const maxValue = Math.max(...allValues)
+    const valueRange = maxValue - minValue
+    const padding = valueRange * 0.1 || 1
+    const domain = [Math.max(0, minValue - padding), Math.min(100, maxValue + padding)]
+
+    // Transform data for Recharts
+    const chartData = dualLineData.map((d) => ({
+      time: d.time,
+      yesValue: d.yesValue,
+      noValue: d.noValue,
+      label: d.label,
+    }))
+
     return (
-      <div className={`w-full ${className} flex items-center justify-center`} style={{ height }}>
-        <p className={isDark ? 'text-white/60' : 'text-gray-600'}>No data available</p>
+      <div className={`w-full ${className}`}>
+        <ResponsiveContainer width="100%" height={height}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+            <XAxis
+              dataKey="time"
+              stroke={textColor}
+              tick={{ fill: textColor, fontSize: 12 }}
+              axisLine={{ stroke: borderColor }}
+              tickLine={{ stroke: borderColor }}
+              label={xAxisLabel ? { value: xAxisLabel, position: 'insideBottom', offset: -5, fill: textColor } : undefined}
+              angle={chartData.length > 1 ? -45 : 0}
+              textAnchor={chartData.length > 1 ? "end" : "middle"}
+              height={chartData.length > 1 ? 60 : 20}
+              hide={chartData.length === 1 && !xAxisLabel}
+            />
+            <YAxis
+              domain={domain}
+              tickFormatter={(value) => `${value}%`}
+              stroke={textColor}
+              tick={{ fill: textColor, fontSize: 12 }}
+              axisLine={{ stroke: borderColor }}
+              tickLine={{ stroke: borderColor }}
+              width={60}
+              label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fill: textColor } : undefined}
+            />
+            <Tooltip content={<DualLineChartTooltip theme={theme} />} />
+            <Legend
+              wrapperStyle={{ paddingTop: '10px' }}
+              iconType="line"
+              formatter={(value) => (
+                <span
+                  style={{
+                    color: textColor,
+                    fontSize: '14px',
+                    fontWeight: 500,
+                  }}
+                >
+                  {value}
+                </span>
+              )}
+            />
+            <Line
+              type="monotone"
+              dataKey="yesValue"
+              name="Yes"
+              stroke={defaultYesColor}
+              strokeWidth={2}
+              dot={showDots ? { fill: defaultYesColor, r: 4 } : false}
+              activeDot={{ r: 6, fill: defaultYesColor }}
+              isAnimationActive={true}
+              animationDuration={800}
+            />
+            <Line
+              type="monotone"
+              dataKey="noValue"
+              name="No"
+              stroke={defaultNoColor}
+              strokeWidth={2}
+              dot={showDots ? { fill: defaultNoColor, r: 4 } : false}
+              activeDot={{ r: 6, fill: defaultNoColor }}
+              isAnimationActive={true}
+              animationDuration={800}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     )
+  }
+
+  // Original single-line mode
+  if (!data || data.length === 0) {
+    // If neither data nor dualLineData is provided, show error
+    if (!showBothLines || !dualLineData) {
+      return (
+        <div className={`w-full ${className} flex items-center justify-center`} style={{ height }}>
+          <p className={isDark ? 'text-white/60' : 'text-gray-600'}>No data available</p>
+        </div>
+      )
+    }
+    // If dual-line mode is active but no single-line data, return early (already handled above)
+    return null
   }
 
   // Calculate min/max for domain with padding
