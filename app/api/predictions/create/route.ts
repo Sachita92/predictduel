@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       stake,          // How much SOL they're betting
       deadline,       // When does this prediction end
       type,           // Is it public or a challenge to a friend?
+      options,        // Optional options array
       walletAddress,  // Wallet address from Privy
       marketPda,      // On-chain market address (from Solana)
       transactionSignature // Transaction signature (from Solana)
@@ -109,6 +110,10 @@ export async function POST(req: NextRequest) {
       yesCount: 0, // No one has voted yet
       noCount: 0,
       participants: [], // No participants yet
+      // Store options if provided (filter out empty strings)
+      ...(options && Array.isArray(options) && options.length > 0 && { 
+        options: options.filter((opt: string) => opt && opt.trim() !== '') 
+      }),
       // Store on-chain data if provided
       ...(marketPda && { marketPda }),
       ...(transactionSignature && { transactionSignature }),

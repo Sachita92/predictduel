@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
         yesCount: duel.yesCount,
         noCount: duel.noCount,
         marketPda: duel.marketPda || null,
+        options: duel.options || [],
         creator: {
           id: duel.creator?._id?.toString() || '',
           username: duel.creator?.username || 'Unknown',

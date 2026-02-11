@@ -25,6 +25,7 @@ interface Duel {
   poolSize: number
   yesCount: number
   noCount: number
+  options?: string[] // Optional options array
   creator: {
     id: string
     username: string
@@ -499,6 +500,19 @@ export default function DuelsPage() {
                   <h3 className="text-lg font-bold mb-4 line-clamp-2 flex-1">
                     {duel.question}
                   </h3>
+
+                  {/* Options */}
+                  {duel.options && duel.options.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex flex-wrap gap-2">
+                        {duel.options.map((option, idx) => (
+                          <Badge key={idx} variant="info" className="text-xs">
+                            {option}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Stats */}
                   <div className="space-y-2 mb-4">

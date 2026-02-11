@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2, Plus } from 'lucide-react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
@@ -38,6 +38,7 @@ export default function CreatePage() {
   const [stake, setStake] = useState(0.1)
   const [deadline, setDeadline] = useState(86400000)
   const [duelType, setDuelType] = useState<'friend' | 'public'>('public')
+  const [options, setOptions] = useState<string[]>(['', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -230,6 +231,7 @@ export default function CreatePage() {
           stake: stake,
           deadline: deadlineDate.toISOString(),
           type: duelType,
+          options: options.filter(opt => opt.trim() !== ''), // Only send non-empty options
           marketPda: marketPda, // On-chain market address
           transactionSignature: transactionSignature, // Transaction signature
         }),
@@ -411,6 +413,34 @@ export default function CreatePage() {
                     }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-primary-from"
                   />
+                </div>
+                
+                <div>
+                  <label className="block mb-2 font-semibold">Place Options <span className="text-white/60 text-sm font-normal">(Optional)</span></label>
+                  <div className="space-y-2">
+                    {options.map((option, index) => (
+                      <input
+                        key={index}
+                        type="text"
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...options]
+                          newOptions[index] = e.target.value
+                          setOptions(newOptions)
+                        }}
+                        placeholder={`Option ${index + 1} placeholder`}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-white/40 focus:outline-none focus:border-primary-from"
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setOptions([...options, ''])}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-white/80 hover:text-white"
+                    >
+                      <Plus size={20} />
+                      Add Option
+                    </button>
+                  </div>
                 </div>
                 
                 <div>

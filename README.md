@@ -7,25 +7,26 @@ The project focuses on real-world Solana integration: wallet-based transactions,
 ## Features
 
 ### Core Functionality
-- ✅ **Landing Page** - Hero section with live activity feed and real-time stats
-- ✅ **Main Feed** - Swipeable card stack for browsing active duels
-- ✅ **Create Duel** - Multi-step wizard for creating predictions with Solana integration
-- ✅ **Duel Detail Page** - Complete duel information with betting, resolution, and claiming
-- ✅ **Betting System** - Place bets on duels with Yes/No predictions
-- ✅ **Resolution System** - Creators can resolve duels after deadline
-- ✅ **Claim Winnings** - Winners can claim their payouts on-chain
-- ✅ **Leaderboard** - Competitive rankings with sorting and time filters
-- ✅ **Profile** - User stats, achievements, created duels, and activity history
-- ✅ **Lightning Round** - 60-second rapid prediction game mode
-- ✅ **Search** - Search duels and users with real-time results
-- ✅ **Notifications** - Real-time notifications for bet events
-- ✅ **Wallet Integration** - Connect Solana wallets
+- **Landing Page** - Hero section with live activity feed and real-time stats
+- **Main Feed** - Swipeable card stack for browsing active duels
+- **Create Duel** - Multi-step wizard for creating predictions with Solana integration
+- **Duel Detail Page** - Complete duel information with betting, resolution, and claiming
+- **TradingView Charts** - Interactive price charts powered by TradingView's Lightweight Charts library
+- **Betting System** - Place bets on duels with Yes/No predictions
+- **Resolution System** - Creators can resolve duels after deadline
+- **Claim Winnings** - Winners can claim their payouts on-chain
+- **Leaderboard** - Competitive rankings with sorting and time filters
+- **Profile** - User stats, achievements, created duels, and activity history
+- **Lightning Round** - 60-second rapid prediction game mode
+- **Search** - Search duels and users with real-time results
+- **Notifications** - Real-time notifications for bet events
+- **Wallet Integration** - Connect Solana wallets
 
 ### Technical Features
-- ✅ **Full Solana Integration** - On-chain market creation, betting, resolution, and claiming
-- ✅ **MongoDB Backend** - Complete API with all CRUD operations
-- ✅ **Real-time Updates** - Live activity feeds and statistics
-- ✅ **Responsive Design** - Mobile-first with smooth animations
+- **Full Solana Integration** - On-chain market creation, betting, resolution, and claiming
+- **MongoDB Backend** - Complete API with all CRUD operations
+- **Real-time Updates** - Live activity feeds and statistics
+- **Responsive Design** - Mobile-first with smooth animations
 
 ## Tech Stack
 
@@ -36,6 +37,7 @@ The project focuses on real-world Solana integration: wallet-based transactions,
 - **Framer Motion** - Smooth animations and interactions
 - **React Confetti** - Celebration effects
 - **Lucide React** - Icon library
+- **TradingView Lightweight Charts** - Professional charting library for price visualization
 
 ### Backend
 - **MongoDB** - Database for storing duels, users, and notifications
@@ -121,6 +123,10 @@ predictduel/
 │   ├── feed/                     # Feed-specific components
 │   ├── search/                   # Search modal
 │   ├── notifications/            # Notification dropdown
+│   ├── charts/                   # Chart components
+│   │   ├── PredictionMarketChart.tsx    # Main chart with probability overlay
+│   │   ├── LightweightPriceChart.tsx    # TradingView Lightweight Charts integration
+│   │   └── ProbabilityBarChart.tsx      # Probability visualization
 │   └── wallet/                   # Wallet connection
 ├── lib/                          # Utilities
 │   ├── solana-market.ts          # Market creation
@@ -151,6 +157,19 @@ predictduel/
 - **ProfileDropdown** - User profile and wallet info
 - **DuelDetailPage** - Complete duel management (bet, resolve, claim)
 
+### Charts
+- **PredictionMarketChart** - Interactive price charts with probability overlays
+- **LightweightPriceChart** - Advanced TradingView-powered charting component
+  - Multiple chart types: Candlestick, Line, Area, Baseline
+  - Customizable intervals: 1s to 1M (1 minute to 1 month)
+  - Technical indicators: RSI, Moving Averages, Volume
+  - Heikin Ashi candlestick mode
+  - Dark/light theme support
+  - Fullscreen mode
+  - Real-time price updates
+- **ProbabilityBarChart** - Probability visualization for non-price predictions
+- **LineChartComponent** - Historical probability tracking over time
+
 ## Design Highlights
 
 - Glass morphism effects throughout
@@ -159,6 +178,40 @@ predictduel/
 - Mobile-first responsive design
 - Fast, energetic feel
 - Satisfying win celebrations
+- Professional TradingView-powered charts for price analysis
+
+## Chart Features
+
+PredictDuel includes advanced charting capabilities powered by **TradingView's Lightweight Charts** library:
+
+### Price Charts
+- **Automatic Detection**: Charts automatically appear for price-related predictions (e.g., "Will SOL hit $200?")
+- **Supported Symbols**: 
+  - `BINANCE:SOLUSDT` (Solana)
+  - `BINANCE:BTCUSDT` (Bitcoin)
+  - `BINANCE:ETHUSDT` (Ethereum)
+- **Chart Types**: Candlestick, Line, Area, Baseline, Heikin Ashi
+- **Time Intervals**: 1 second to 1 month (1s, 15s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h, 1d, 1w, 1M)
+- **Technical Indicators**: 
+  - RSI (Relative Strength Index) with customizable periods
+  - Volume histogram
+  - Moving averages
+- **Interactive Features**:
+  - Zoom and pan
+  - Crosshair with price/time display
+  - Fullscreen mode
+  - Theme switching (dark/light)
+  - Customizable display options
+
+### Probability Charts
+- **Line Chart**: Shows probability evolution over time
+- **Bar Chart**: Displays current Yes/No probability distribution
+- **Real-time Updates**: Charts update as new bets are placed
+
+### Chart Display Logic
+- **Price Questions**: Shows TradingView price chart with probability overlay
+  - Detects keywords: "price", "hit", "reach", "above", "below", "$", "SOL", "BTC", "ETH"
+- **Non-Price Questions**: Shows probability line chart (e.g., "Will it rain?", "Will Team X win?")
 
 ## API Endpoints
 
@@ -186,7 +239,7 @@ predictduel/
 
 ## Current Status
 
-✅ **All Core Features Completed**
+**All Core Features Completed**
 - Full Solana integration (create, bet, resolve, claim)
 - Complete MongoDB backend with all APIs
 - All pages functional with real data

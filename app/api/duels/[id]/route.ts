@@ -53,6 +53,7 @@ export async function GET(
       type: duel.type,
       marketPda: duel.marketPda,
       transactionSignature: duel.transactionSignature,
+      options: duel.options || [],
       creator: {
         id: creator?._id?.toString() || creator?.id?.toString() || '',
         username: creator?.username || 'Unknown',

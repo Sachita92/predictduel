@@ -29,6 +29,7 @@ interface Duel {
   poolSize: number
   yesCount: number
   noCount: number
+  options?: string[] // Optional options array
   creator: {
     id: string
     username: string
@@ -1258,6 +1259,20 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               })()}
             </div>
           </div>
+          
+          {/* Options */}
+          {duel.options && duel.options.length > 0 && (
+            <div className="mb-4">
+              <div className="text-sm text-white/60 mb-2">Options:</div>
+              <div className="flex flex-wrap gap-2">
+                {duel.options.map((option, idx) => (
+                  <Badge key={idx} variant="info" className="text-sm">
+                    {option}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
           
           {/* Resolved Duel Summary Banner */}
           {duel.status === 'resolved' && duel.outcome && (

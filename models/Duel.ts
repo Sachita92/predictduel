@@ -23,6 +23,7 @@ export interface IDuel extends Document {
   noCount: number
   marketPda?: string // On-chain market address (Solana PDA)
   transactionSignature?: string // Transaction signature for on-chain creation
+  options?: string[] // Optional options for the duel (e.g., ["Option 1", "Option 2"])
   resolutionData?: {
     // For crypto predictions
     targetPrice?: number
@@ -136,6 +137,10 @@ const DuelSchema: Schema = new Schema(
     },
     transactionSignature: {
       type: String,
+    },
+    options: {
+      type: [String],
+      default: [],
     },
     resolutionData: {
       targetPrice: Number,
