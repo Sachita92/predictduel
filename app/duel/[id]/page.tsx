@@ -1251,7 +1251,10 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     className="text-sm px-3 py-1"
                   >
                     {duel.status === 'active' ? 'Active' :
-                     duel.status === 'resolved' ? `Resolved: ${duel.outcome === 'yes' ? 'YES' : 'NO'}` :
+                     duel.status === 'resolved' 
+                       ? `Resolved: ${duel.options && duel.options.length === 2 
+                           ? (duel.outcome === 'yes' ? duel.options[0] : duel.options[1])
+                           : (duel.outcome === 'yes' ? 'YES' : 'NO')}` :
                      duel.status === 'pending' ? 'Pending' :
                      'Cancelled'}
                   </Badge>
@@ -1259,20 +1262,6 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               })()}
             </div>
           </div>
-          
-          {/* Options */}
-          {duel.options && duel.options.length > 0 && (
-            <div className="mb-4">
-              <div className="text-sm text-white/60 mb-2">Options:</div>
-              <div className="flex flex-wrap gap-2">
-                {duel.options.map((option, idx) => (
-                  <Badge key={idx} variant="info" className="text-sm">
-                    {option}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
           
           {/* Resolved Duel Summary Banner */}
           {duel.status === 'resolved' && duel.outcome && (
@@ -1282,7 +1271,9 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   <div className="text-sm text-white/70 mb-1">Final Outcome</div>
                   <div className="text-2xl font-bold">
                     <Badge variant={duel.outcome === 'yes' ? 'success' : 'danger'} className="text-lg px-4 py-2">
-                      {duel.outcome.toUpperCase()}
+                      {duel.options && duel.options.length === 2 
+                        ? (duel.outcome === 'yes' ? duel.options[0] : duel.options[1])
+                        : duel.outcome.toUpperCase()}
                     </Badge>
                   </div>
                 </div>
@@ -1578,35 +1569,71 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   
                   <div className="space-y-3">
-                    <button
-                      type="button"
-                      className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                      onClick={handleYesBet}
-                      disabled={isBetting || !canBet}
-                    >
-                      {isBetting && selectedPrediction === 'yes' ? (
-                        <Loader2 className="animate-spin" size={24} />
-                      ) : (
-                        <>YES <span className="ml-2 text-sm opacity-80">
-                          {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
-                        </span></>
-                      )}
-                    </button>
-                    
-                    <button
-                      type="button"
-                      className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                      onClick={handleNoBet}
-                      disabled={isBetting || !canBet}
-                    >
-                      {isBetting && selectedPrediction === 'no' ? (
-                        <Loader2 className="animate-spin" size={24} />
-                      ) : (
-                        <>NO <span className="ml-2 text-sm opacity-80">
-                          {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
-                        </span></>
-                      )}
-                    </button>
+                    {duel.options && duel.options.length === 2 ? (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                          onClick={handleYesBet}
+                          disabled={isBetting || !canBet}
+                        >
+                          {isBetting && selectedPrediction === 'yes' ? (
+                            <Loader2 className="animate-spin" size={24} />
+                          ) : (
+                            <>{duel.options[0]} <span className="ml-2 text-sm opacity-80">
+                              {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
+                            </span></>
+                          )}
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                          onClick={handleNoBet}
+                          disabled={isBetting || !canBet}
+                        >
+                          {isBetting && selectedPrediction === 'no' ? (
+                            <Loader2 className="animate-spin" size={24} />
+                          ) : (
+                            <>{duel.options[1]} <span className="ml-2 text-sm opacity-80">
+                              {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
+                            </span></>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                          onClick={handleYesBet}
+                          disabled={isBetting || !canBet}
+                        >
+                          {isBetting && selectedPrediction === 'yes' ? (
+                            <Loader2 className="animate-spin" size={24} />
+                          ) : (
+                            <>YES <span className="ml-2 text-sm opacity-80">
+                              {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
+                            </span></>
+                          )}
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+                          onClick={handleNoBet}
+                          disabled={isBetting || !canBet}
+                        >
+                          {isBetting && selectedPrediction === 'no' ? (
+                            <Loader2 className="animate-spin" size={24} />
+                          ) : (
+                            <>NO <span className="ml-2 text-sm opacity-80">
+                              {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
+                            </span></>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                   
                   {canBet && (

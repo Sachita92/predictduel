@@ -501,19 +501,6 @@ export default function DuelsPage() {
                     {duel.question}
                   </h3>
 
-                  {/* Options */}
-                  {duel.options && duel.options.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex flex-wrap gap-2">
-                        {duel.options.map((option, idx) => (
-                          <Badge key={idx} variant="info" className="text-xs">
-                            {option}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Stats */}
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center justify-between text-sm">
@@ -584,51 +571,107 @@ export default function DuelsPage() {
                    (duel.status === 'active' || duel.status === 'pending') &&
                    new Date(duel.deadline) > new Date() && !votedDuels.has(duel.id) ? (
                     <div className="flex gap-2 mb-4">
-                      <button
-                        type="button"
-                        onClick={() => handleBet(duel.id, 'yes')}
-                        disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
-                        className="flex-1 bg-success/20 hover:bg-success/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-success/30 hover:border-success/50"
-                      >
-                        <div className="text-xs text-white/60 mb-1">YES</div>
-                        <div className="font-bold text-success">
-                          {bettingDuelId === duel.id && bettingPrediction === 'yes' ? (
-                            <Loader2 className="animate-spin mx-auto" size={16} />
-                          ) : (
-                            duel.yesCount
-                          )}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBet(duel.id, 'no')}
-                        disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
-                        className="flex-1 bg-danger/20 hover:bg-danger/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-danger/30 hover:border-danger/50"
-                      >
-                        <div className="text-xs text-white/60 mb-1">NO</div>
-                        <div className="font-bold text-danger">
-                          {bettingDuelId === duel.id && bettingPrediction === 'no' ? (
-                            <Loader2 className="animate-spin mx-auto" size={16} />
-                          ) : (
-                            duel.noCount
-                          )}
-                        </div>
-                      </button>
+                      {duel.options && duel.options.length === 2 ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleBet(duel.id, 'yes')}
+                            disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
+                            className="flex-1 bg-success/20 hover:bg-success/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-success/30 hover:border-success/50"
+                          >
+                            <div className="text-xs text-white/60 mb-1">{duel.options[0]}</div>
+                            <div className="font-bold text-success">
+                              {bettingDuelId === duel.id && bettingPrediction === 'yes' ? (
+                                <Loader2 className="animate-spin mx-auto" size={16} />
+                              ) : (
+                                duel.yesCount
+                              )}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBet(duel.id, 'no')}
+                            disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
+                            className="flex-1 bg-danger/20 hover:bg-danger/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-danger/30 hover:border-danger/50"
+                          >
+                            <div className="text-xs text-white/60 mb-1">{duel.options[1]}</div>
+                            <div className="font-bold text-danger">
+                              {bettingDuelId === duel.id && bettingPrediction === 'no' ? (
+                                <Loader2 className="animate-spin mx-auto" size={16} />
+                              ) : (
+                                duel.noCount
+                              )}
+                            </div>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleBet(duel.id, 'yes')}
+                            disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
+                            className="flex-1 bg-success/20 hover:bg-success/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-success/30 hover:border-success/50"
+                          >
+                            <div className="text-xs text-white/60 mb-1">YES</div>
+                            <div className="font-bold text-success">
+                              {bettingDuelId === duel.id && bettingPrediction === 'yes' ? (
+                                <Loader2 className="animate-spin mx-auto" size={16} />
+                              ) : (
+                                duel.yesCount
+                              )}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBet(duel.id, 'no')}
+                            disabled={bettingDuelId === duel.id || votedDuels.has(duel.id)}
+                            className="flex-1 bg-danger/20 hover:bg-danger/30 rounded-lg p-2 text-center transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-2 border-danger/30 hover:border-danger/50"
+                          >
+                            <div className="text-xs text-white/60 mb-1">NO</div>
+                            <div className="font-bold text-danger">
+                              {bettingDuelId === duel.id && bettingPrediction === 'no' ? (
+                                <Loader2 className="animate-spin mx-auto" size={16} />
+                              ) : (
+                                duel.noCount
+                              )}
+                            </div>
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="flex gap-2 mb-4">
-                      <div className="flex-1 bg-success/20 rounded-lg p-2 text-center">
-                        <div className="text-xs text-white/60 mb-1">YES</div>
-                        <div className="font-bold text-success">
-                          {duel.yesCount}
-                        </div>
-                      </div>
-                      <div className="flex-1 bg-danger/20 rounded-lg p-2 text-center">
-                        <div className="text-xs text-white/60 mb-1">NO</div>
-                        <div className="font-bold text-danger">
-                          {duel.noCount}
-                        </div>
-                      </div>
+                      {duel.options && duel.options.length === 2 ? (
+                        <>
+                          <div className="flex-1 bg-success/20 rounded-lg p-2 text-center">
+                            <div className="text-xs text-white/60 mb-1">{duel.options[0]}</div>
+                            <div className="font-bold text-success">
+                              {duel.yesCount}
+                            </div>
+                          </div>
+                          <div className="flex-1 bg-danger/20 rounded-lg p-2 text-center">
+                            <div className="text-xs text-white/60 mb-1">{duel.options[1]}</div>
+                            <div className="font-bold text-danger">
+                              {duel.noCount}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex-1 bg-success/20 rounded-lg p-2 text-center">
+                            <div className="text-xs text-white/60 mb-1">YES</div>
+                            <div className="font-bold text-success">
+                              {duel.yesCount}
+                            </div>
+                          </div>
+                          <div className="flex-1 bg-danger/20 rounded-lg p-2 text-center">
+                            <div className="text-xs text-white/60 mb-1">NO</div>
+                            <div className="font-bold text-danger">
+                              {duel.noCount}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 

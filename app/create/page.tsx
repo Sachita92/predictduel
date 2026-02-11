@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2, Plus, X } from 'lucide-react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
@@ -419,18 +419,30 @@ export default function CreatePage() {
                   <label className="block mb-2 font-semibold">Place Options <span className="text-white/60 text-sm font-normal">(Optional)</span></label>
                   <div className="space-y-2">
                     {options.map((option, index) => (
-                      <input
-                        key={index}
-                        type="text"
-                        value={option}
-                        onChange={(e) => {
-                          const newOptions = [...options]
-                          newOptions[index] = e.target.value
-                          setOptions(newOptions)
-                        }}
-                        placeholder={`Option ${index + 1} placeholder`}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-white/40 focus:outline-none focus:border-primary-from"
-                      />
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(e) => {
+                            const newOptions = [...options]
+                            newOptions[index] = e.target.value
+                            setOptions(newOptions)
+                          }}
+                          placeholder={`Option ${index + 1}`}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-white/40 focus:outline-none focus:border-primary-from"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOptions = options.filter((_, i) => i !== index)
+                            setOptions(newOptions.length > 0 ? newOptions : ['', ''])
+                          }}
+                          className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-white/60 hover:text-white"
+                          title="Remove option"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
                     ))}
                     <button
                       type="button"
@@ -513,6 +525,21 @@ export default function CreatePage() {
                         </div>
                       </div>
                       <h3 className="text-xl font-bold mb-4">{question}</h3>
+                      
+                      {/* Options */}
+                      {options && options.filter(opt => opt.trim() !== '').length > 0 && (
+                        <div className="mb-4">
+                          <div className="text-sm text-white/60 mb-2">Options:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {options.filter(opt => opt.trim() !== '').map((option, idx) => (
+                              <Badge key={idx} variant="info" className="text-xs">
+                                {option}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="flex justify-between text-sm">
                         <span className="text-white/60">Stake:</span>
                         <span className="font-bold">{stake.toFixed(2)} SOL</span>
