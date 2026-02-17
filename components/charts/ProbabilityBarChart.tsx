@@ -22,6 +22,9 @@ interface ProbabilityBarChartProps {
   height?: number
   theme?: 'light' | 'dark'
   className?: string
+  // Option names for custom options (replaces Yes/No)
+  yesOptionName?: string
+  noOptionName?: string
 }
 
 interface ChartDataItem {
@@ -60,6 +63,9 @@ interface LineChartComponentProps {
   dualLineData?: DualLineChartData[]
   yesLineColor?: string
   noLineColor?: string
+  // Option names for custom options (replaces Yes/No)
+  yesOptionName?: string
+  noOptionName?: string
 }
 
 const CustomTooltip = ({ active, payload, theme = 'dark' }: any) => {
@@ -131,10 +137,17 @@ const LineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
 }
 
 // Custom Tooltip for Dual-Line Chart
-const DualLineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
+const DualLineChartTooltip = ({ active, payload, theme = 'dark', yesOptionName, noOptionName }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload
     const isDark = theme === 'dark'
+    
+    // Map entry names to option names if provided
+    const getName = (entryName: string) => {
+      if (entryName === 'Yes' && yesOptionName) return yesOptionName
+      if (entryName === 'No' && noOptionName) return noOptionName
+      return entryName
+    }
     
     return (
       <div
@@ -147,7 +160,7 @@ const DualLineChartTooltip = ({ active, payload, theme = 'dark' }: any) => {
         <p className="font-semibold mb-2">{data.time || data.label || 'Value'}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm mb-1 last:mb-0" style={{ color: entry.color }}>
-            {entry.name}: <span className="font-medium">{entry.value.toFixed(2)}%</span>
+            {getName(entry.name)}: <span className="font-medium">{entry.value.toFixed(2)}%</span>
           </p>
         ))}
       </div>
@@ -164,6 +177,8 @@ export default function ProbabilityBarChart({
   height = 300,
   theme = 'dark',
   className = '',
+  yesOptionName,
+  noOptionName,
 }: ProbabilityBarChartProps) {
   const isDark = theme === 'dark'
 
@@ -175,11 +190,13 @@ export default function ProbabilityBarChart({
   const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
 
   // Prepare data for grouped bar chart
-  const data: ChartDataItem[] = [
+  const yesKey = yesOptionName || 'Yes'
+  const noKey = noOptionName || 'No'
+  const data: any[] = [
     {
       name: 'Probability',
-      Yes: Math.max(0, Math.min(100, yesProbability)),
-      No: Math.max(0, Math.min(100, noProbability)),
+      [yesKey]: Math.max(0, Math.min(100, yesProbability)),
+      [noKey]: Math.max(0, Math.min(100, noProbability)),
     },
   ]
 
@@ -231,7 +248,7 @@ export default function ProbabilityBarChart({
             )}
           />
           <Bar
-            dataKey="Yes"
+            dataKey={yesKey}
             fill={yesColor}
             radius={[8, 8, 0, 0]}
             maxBarSize={120}
@@ -240,11 +257,11 @@ export default function ProbabilityBarChart({
           >
             <LabelList
               content={<CustomLabel fill={yesColor} />}
-              dataKey="Yes"
+              dataKey={yesKey}
             />
           </Bar>
           <Bar
-            dataKey="No"
+            dataKey={noKey}
             fill={noColor}
             radius={[8, 8, 0, 0]}
             maxBarSize={120}
@@ -253,7 +270,7 @@ export default function ProbabilityBarChart({
           >
             <LabelList
               content={<CustomLabel fill={noColor} />}
-              dataKey="No"
+              dataKey={noKey}
             />
           </Bar>
         </BarChart>
@@ -267,11 +284,11 @@ export default function ProbabilityBarChart({
         >
           <span className="font-medium">Liquidity:</span>{' '}
           <span className={isDark ? 'text-emerald-400' : 'text-emerald-600'}>
-            Yes {formatLiquidity(yesLiquidity) ?? '—'}
+            {yesOptionName || 'Yes'} {formatLiquidity(yesLiquidity) ?? '—'}
           </span>
           {' | '}
           <span className={isDark ? 'text-red-400' : 'text-red-600'}>
-            No {formatLiquidity(noLiquidity) ?? '—'}
+            {noOptionName || 'No'} {formatLiquidity(noLiquidity) ?? '—'}
           </span>
         </div>
       )}
@@ -294,6 +311,8 @@ export function LineChartComponent({
   dualLineData,
   yesLineColor,
   noLineColor,
+  yesOptionName,
+  noOptionName,
 }: LineChartComponentProps) {
   const isDark = theme === 'dark'
   const textColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'
@@ -359,26 +378,31 @@ export function LineChartComponent({
               width={60}
               label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fill: textColor } : undefined}
             />
-            <Tooltip content={<DualLineChartTooltip theme={theme} />} />
+            <Tooltip content={<DualLineChartTooltip theme={theme} yesOptionName={yesOptionName} noOptionName={noOptionName} />} />
             <Legend
               wrapperStyle={{ paddingTop: '10px' }}
               iconType="line"
-              formatter={(value) => (
-                <span
-                  style={{
-                    color: textColor,
-                    fontSize: '14px',
-                    fontWeight: 500,
-                  }}
-                >
-                  {value}
-                </span>
-              )}
+              formatter={(value) => {
+                // Map legend values to option names if provided
+                const displayName = value === 'Yes' && yesOptionName ? yesOptionName : 
+                                  value === 'No' && noOptionName ? noOptionName : value
+                return (
+                  <span
+                    style={{
+                      color: textColor,
+                      fontSize: '14px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {displayName}
+                  </span>
+                )
+              }}
             />
             <Line
               type="monotone"
               dataKey="yesValue"
-              name="Yes"
+              name={yesOptionName || "Yes"}
               stroke={defaultYesColor}
               strokeWidth={2}
               dot={showDots ? { fill: defaultYesColor, r: 4 } : false}
@@ -389,7 +413,7 @@ export function LineChartComponent({
             <Line
               type="monotone"
               dataKey="noValue"
-              name="No"
+              name={noOptionName || "No"}
               stroke={defaultNoColor}
               strokeWidth={2}
               dot={showDots ? { fill: defaultNoColor, r: 4 } : false}

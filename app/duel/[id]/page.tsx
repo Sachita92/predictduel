@@ -1021,6 +1021,81 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
     [duel?.participants]
   )
 
+  // Calculate option-specific stats for multiple options
+  const optionStats = useMemo(() => {
+    if (!duel?.options || duel.options.length === 0) {
+      // Default YES/NO case
+      return [
+        {
+          label: 'YES',
+          count: duel?.yesCount || 0,
+          stake: yesStake,
+          color: 'success',
+          bgColor: 'bg-success/10',
+          textColor: 'text-success'
+        },
+        {
+          label: 'NO',
+          count: duel?.noCount || 0,
+          stake: noStake,
+          color: 'danger',
+          bgColor: 'bg-danger/10',
+          textColor: 'text-danger'
+        }
+      ]
+    }
+
+    // Color scheme for multiple options
+    const optionColors = [
+      { bgColor: 'bg-success/10', textColor: 'text-success', color: 'success' },
+      { bgColor: 'bg-danger/10', textColor: 'text-danger', color: 'danger' },
+      { bgColor: 'bg-blue-500/10', textColor: 'text-blue-400', color: 'blue' },
+      { bgColor: 'bg-purple-500/10', textColor: 'text-purple-400', color: 'purple' },
+      { bgColor: 'bg-yellow-500/10', textColor: 'text-yellow-400', color: 'yellow' },
+      { bgColor: 'bg-pink-500/10', textColor: 'text-pink-400', color: 'pink' },
+    ]
+
+    return duel.options.map((option, index) => {
+      // Map first two options to yes/no stats
+      if (index === 0) {
+        return {
+          label: option,
+          count: duel.yesCount || 0,
+          stake: yesStake,
+          ...optionColors[index % optionColors.length]
+        }
+      } else if (index === 1) {
+        return {
+          label: option,
+          count: duel.noCount || 0,
+          stake: noStake,
+          ...optionColors[index % optionColors.length]
+        }
+      } else {
+        // For options beyond 2, show 0 (backend doesn't track them yet)
+        return {
+          label: option,
+          count: 0,
+          stake: 0,
+          ...optionColors[index % optionColors.length]
+        }
+      }
+    })
+  }, [duel?.options, duel?.yesCount, duel?.noCount, yesStake, noStake])
+
+  // Get button styling for each option index
+  const getOptionButtonStyle = (index: number) => {
+    const styles = [
+      { bg: 'bg-success', hoverBg: 'hover:bg-green-600', textColor: 'text-white' },
+      { bg: 'bg-white/10', hoverBg: 'hover:bg-white/20', textColor: 'text-white' },
+      { bg: 'bg-blue-500/20', hoverBg: 'hover:bg-blue-500/30', textColor: 'text-blue-400' },
+      { bg: 'bg-purple-500/20', hoverBg: 'hover:bg-purple-500/30', textColor: 'text-purple-400' },
+      { bg: 'bg-yellow-500/20', hoverBg: 'hover:bg-yellow-500/30', textColor: 'text-yellow-400' },
+      { bg: 'bg-pink-500/20', hoverBg: 'hover:bg-pink-500/30', textColor: 'text-pink-400' },
+    ]
+    return styles[index % styles.length]
+  }
+
   // Calculate potential payout and odds based on current pool distribution
   const totalPool = useMemo(() => (duel?.poolSize || 0) + betAmount, [duel?.poolSize, betAmount])
   
@@ -1444,6 +1519,8 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                           showDots={dualLineChartData.length <= 20} // Only show dots if not too many points
                           yAxisLabel={duel.options && duel.options.length === 2 ? "Probability (%)" : "Probability (%)"}
                           xAxisLabel=""
+                          yesOptionName={duel.options && duel.options.length === 2 ? duel.options[0] : undefined}
+                          noOptionName={duel.options && duel.options.length === 2 ? duel.options[1] : undefined}
                         />
                       )}
                       <div className="mt-3 text-xs text-center text-slate-400 space-y-1">
@@ -1495,20 +1572,23 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                       {duel.poolSize.toFixed(2)} {currency}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg">
-                    <span className="text-white/70">{duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'}</span>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-success">{duel.yesCount}</div>
-                      <div className="text-xs text-white/60">{yesStake.toFixed(2)} {currency}</div>
+                  {/* Render all options dynamically */}
+                  {optionStats.map((optionStat, index) => (
+                    <div 
+                      key={index}
+                      className={`flex items-center justify-between p-3 ${optionStat.bgColor} rounded-lg`}
+                    >
+                      <span className="text-white/70">{optionStat.label}</span>
+                      <div className="text-right">
+                        <div className={`text-lg font-bold ${optionStat.textColor}`}>
+                          {optionStat.count}
+                        </div>
+                        <div className="text-xs text-white/60">
+                          {optionStat.stake.toFixed(2)} {currency}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-danger/10 rounded-lg">
-                    <span className="text-white/70">{duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'}</span>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-danger">{duel.noCount}</div>
-                      <div className="text-xs text-white/60">{noStake.toFixed(2)} {currency}</div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
               
@@ -1581,91 +1661,91 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   
                   <div className="space-y-3">
-                    {duel.options && duel.options.length === 2 ? (
-                      <>
+                    {/* Render all options dynamically */}
+                    {optionStats.map((optionStat, index) => {
+                      const buttonStyle = getOptionButtonStyle(index)
+                      const isFirstOption = index === 0
+                      const isSecondOption = index === 1
+                      const isSupported = index < 2 // Only first two options are supported by backend
+                      
+                      // Determine click handler and disabled state
+                      const handleClick = isFirstOption ? handleYesBet : isSecondOption ? handleNoBet : undefined
+                      const isDisabled = isBetting || !canBet || !isSupported
+                      const isLoading = (isBetting && selectedPrediction === (isFirstOption ? 'yes' : isSecondOption ? 'no' : null))
+                      
+                      // Calculate payout display
+                      let payoutDisplay = '—'
+                      if (isFirstOption) {
+                        payoutDisplay = yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`
+                      } else if (isSecondOption) {
+                        payoutDisplay = noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`
+                      }
+                      
+                      return (
                         <button
+                          key={index}
                           type="button"
-                          className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                          onClick={handleYesBet}
-                          disabled={isBetting || !canBet}
+                          className={`w-full h-16 text-xl font-bold ${buttonStyle.bg} ${buttonStyle.hoverBg} ${buttonStyle.textColor} border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center ${!isSupported ? 'opacity-60' : ''}`}
+                          onClick={handleClick}
+                          disabled={isDisabled}
+                          title={!isSupported ? 'This option is not yet supported for betting' : ''}
                         >
-                          {isBetting && selectedPrediction === 'yes' ? (
+                          {isLoading ? (
                             <Loader2 className="animate-spin" size={24} />
                           ) : (
-                            <>{duel.options[0]} <span className="ml-2 text-sm opacity-80">
-                              {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
-                            </span></>
+                            <>
+                              {optionStat.label}
+                              {isSupported && payoutDisplay !== '—' && (
+                                <span className="ml-2 text-sm opacity-80">
+                                  {payoutDisplay}
+                                </span>
+                              )}
+                              {!isSupported && (
+                                <span className="ml-2 text-xs opacity-60">
+                                  (Coming Soon)
+                                </span>
+                              )}
+                            </>
                           )}
                         </button>
-                        
-                        <button
-                          type="button"
-                          className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                          onClick={handleNoBet}
-                          disabled={isBetting || !canBet}
-                        >
-                          {isBetting && selectedPrediction === 'no' ? (
-                            <Loader2 className="animate-spin" size={24} />
-                          ) : (
-                            <>{duel.options[1]} <span className="ml-2 text-sm opacity-80">
-                              {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
-                            </span></>
-                          )}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="w-full h-16 text-xl font-bold bg-success hover:bg-green-600 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                          onClick={handleYesBet}
-                          disabled={isBetting || !canBet}
-                        >
-                          {isBetting && selectedPrediction === 'yes' ? (
-                            <Loader2 className="animate-spin" size={24} />
-                          ) : (
-                            <>YES <span className="ml-2 text-sm opacity-80">
-                              {yesProfit > 0 ? `+${yesProfit.toFixed(2)} ${currency}` : `${yesPayout.toFixed(2)} ${currency}`}
-                            </span></>
-                          )}
-                        </button>
-                        
-                        <button
-                          type="button"
-                          className="w-full h-16 text-xl font-bold bg-white/10 hover:bg-white/20 text-white border-0 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
-                          onClick={handleNoBet}
-                          disabled={isBetting || !canBet}
-                        >
-                          {isBetting && selectedPrediction === 'no' ? (
-                            <Loader2 className="animate-spin" size={24} />
-                          ) : (
-                            <>NO <span className="ml-2 text-sm opacity-80">
-                              {noProfit > 0 ? `+${noProfit.toFixed(2)} ${currency}` : `${noPayout.toFixed(2)} ${currency}`}
-                            </span></>
-                          )}
-                        </button>
-                      </>
-                    )}
+                      )
+                    })}
                   </div>
                   
                   {canBet && (
                     <div className="mt-4 p-3 bg-white/5 rounded-lg text-xs text-white/60">
-                      <div className="flex items-center justify-between mb-1">
-                        <span>Potential Payout ({duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'})</span>
-                        <span className="text-success font-semibold">
-                          {yesPayout > 0 ? `${yesPayout.toFixed(2)} ${currency}` : '—'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span>Potential Payout ({duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'})</span>
-                        <span className="text-white/80 font-semibold">
-                          {noPayout > 0 ? `${noPayout.toFixed(2)} ${currency}` : '—'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
+                      {/* Show payout for all options */}
+                      {optionStats.map((optionStat, index) => {
+                        const isSupported = index < 2
+                        let payout = '—'
+                        if (index === 0) {
+                          payout = yesPayout > 0 ? `${yesPayout.toFixed(2)} ${currency}` : '—'
+                        } else if (index === 1) {
+                          payout = noPayout > 0 ? `${noPayout.toFixed(2)} ${currency}` : '—'
+                        }
+                        
+                        return (
+                          <div key={index} className="flex items-center justify-between mb-1">
+                            <span>Potential Payout ({optionStat.label})</span>
+                            <span className={`${index === 0 ? 'text-success' : index === 1 ? 'text-white/80' : 'text-white/60'} font-semibold`}>
+                              {payout}
+                              {!isSupported && <span className="ml-1 text-xs opacity-60">(N/A)</span>}
+                            </span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
                         <span>Current Odds</span>
-                        <span>
-                          {duel.options && duel.options.length === 2 ? duel.options[0] : 'YES'}: {yesProbability.toFixed(1)}% | {duel.options && duel.options.length === 2 ? duel.options[1] : 'NO'}: {noProbability.toFixed(1)}%
+                        <span className="text-xs">
+                          {optionStats.map((optionStat, index) => {
+                            if (index === 0) {
+                              return `${optionStat.label}: ${yesProbability.toFixed(1)}%`
+                            } else if (index === 1) {
+                              return ` | ${optionStat.label}: ${noProbability.toFixed(1)}%`
+                            } else {
+                              return ` | ${optionStat.label}: 0%`
+                            }
+                          }).join('')}
                         </span>
                       </div>
                     </div>
@@ -1684,7 +1764,13 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-2xl font-bold mb-1">
-                    {userParticipation.prediction.toUpperCase()}
+                    {duel.options && duel.options.length > 0
+                      ? (userParticipation.prediction === 'yes' 
+                          ? duel.options[0] 
+                          : userParticipation.prediction === 'no' && duel.options.length > 1
+                          ? duel.options[1]
+                          : userParticipation.prediction.toUpperCase())
+                      : userParticipation.prediction.toUpperCase()}
                   </div>
                   <div className="text-white/60">
                     Stake: {userParticipation.stake.toFixed(2)} {currency}
@@ -2224,7 +2310,13 @@ export default function DuelDetailPage({ params }: { params: Promise<{ id: strin
                     <div>
                       <div className="font-semibold">@{participant.user.username}</div>
                       <div className="text-sm text-white/60">
-                        {participant.prediction.toUpperCase()} - {participant.stake.toFixed(2)} {currency}
+                        {duel.options && duel.options.length > 0
+                          ? (participant.prediction === 'yes' 
+                              ? duel.options[0] 
+                              : participant.prediction === 'no' && duel.options.length > 1
+                              ? duel.options[1]
+                              : participant.prediction.toUpperCase())
+                          : participant.prediction.toUpperCase()} - {participant.stake.toFixed(2)} {currency}
                       </div>
                     </div>
                   </div>

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Clock, Users, TrendingUp, Loader2, Filter, ChevronDown } from 'lucide-react'
+import { Clock, Users, TrendingUp, Loader2, Filter, ChevronDown, ChevronRight } from 'lucide-react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import TopNav from '@/components/navigation/TopNav'
 import MobileNav from '@/components/navigation/MobileNav'
@@ -273,6 +273,30 @@ export default function DuelsPage() {
     return colors[category] || colors.Other
   }
 
+  // Group duels by category
+  const duelsByCategory = useMemo(() => {
+    const grouped: Record<string, Duel[]> = {}
+    
+    duels.forEach(duel => {
+      const category = duel.category || 'Other'
+      if (!grouped[category]) {
+        grouped[category] = []
+      }
+      grouped[category].push(duel)
+    })
+    
+    // Sort categories alphabetically, but put selected category first if filtering
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      if (selectedCategory !== 'All') {
+        if (a === selectedCategory) return -1
+        if (b === selectedCategory) return 1
+      }
+      return a.localeCompare(b)
+    })
+    
+    return { grouped, sortedCategories }
+  }, [duels, selectedCategory])
+
   return (
     <div className="min-h-screen bg-background-dark pb-20">
       <TopNav />
@@ -434,23 +458,43 @@ export default function DuelsPage() {
           </Card>
         )}
 
-        {/* Duels Grid */}
+        {/* Duels by Category */}
         {!isLoading && !error && duels.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {duels.map((duel, index) => (
-              <motion.div
-                key={duel.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <Card variant="glass" hover className="p-6 h-full flex flex-col">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <Badge className={getCategoryColor(duel.category)}>
-                      {duel.category}
-                    </Badge>
-                    <div className="flex gap-2">
+          <div className="space-y-12">
+            {duelsByCategory.sortedCategories.map((category) => {
+              const categoryDuels = duelsByCategory.grouped[category]
+              
+              // Skip empty categories
+              if (!categoryDuels || categoryDuels.length === 0) {
+                return null
+              }
+              
+              // Skip this category if filtering by a specific category and it doesn't match
+              if (selectedCategory !== 'All' && category !== selectedCategory) {
+                return null
+              }
+              
+              return (
+                <div key={category} className="space-y-6">
+                  {/* Category Header */}
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-3xl font-bold text-white">{category}</h2>
+                    <ChevronRight size={24} className="text-primary-from" />
+                  </div>
+                  
+                  {/* Duels Grid for this Category */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {categoryDuels.map((duel, index) => (
+                      <motion.div
+                        key={duel.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                      >
+                        <Card variant="glass" hover className="p-6 h-full flex flex-col">
+                          {/* Header */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex gap-2 ml-auto">
                       {duel.status === 'resolved' && duel.outcome && (
                         <Badge
                           variant={duel.outcome === 'yes' ? 'success' : 'danger'}
@@ -697,8 +741,12 @@ export default function DuelsPage() {
                     View Details
                   </Button>
                 </Card>
-              </motion.div>
-            ))}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
